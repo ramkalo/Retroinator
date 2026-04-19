@@ -30,6 +30,12 @@ function applyChromaticAberration(imageData, p = params) {
     const thresh  = 255 * (p.chromaThreshold / 100);
     const reverse = p.chromaThresholdReverse;
 
+    const fadeAmount = p.chromaFade / 100;
+    const cx = width  * (0.5 + p.chromaFadeX / 100);
+    const cy = height * (0.5 - p.chromaFadeY / 100);
+    const maxDist = Math.sqrt(Math.max(cx, width - cx) ** 2 + Math.max(cy, height - cy) ** 2);
+    const fadeDist = Math.max(1, maxDist * (p.chromaFadeRadius / 100));
+
     for (const shift of shifts) {
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
@@ -39,8 +45,22 @@ function applyChromaticAberration(imageData, p = params) {
                 const apply = reverse ? (lum <= thresh) : (lum >= thresh);
                 if (!apply) continue;
 
-                const nx = Math.round(x + shift.x);
-                const ny = Math.round(y - shift.y); // Negate Y: negative = down
+                const dx = x - cx;
+                const dy = y - cy;
+                const rawDist = Math.sqrt(dx * dx + dy * dy);
+                let weight;
+                if (p.chromaFadeInvert) {
+                    if (rawDist < fadeDist) continue;
+                    const outerRange = maxDist - fadeDist;
+                    const outerT = outerRange > 0 ? Math.min(1, (rawDist - fadeDist) / outerRange) : 1;
+                    weight = 1 - fadeAmount * (1 - outerT);
+                } else {
+                    if (rawDist >= fadeDist) continue;
+                    weight = 1 - fadeAmount * (rawDist / fadeDist);
+                }
+
+                const nx = Math.round(x + shift.x * weight);
+                const ny = Math.round(y - shift.y * weight);
                 if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
                     result[idx + shift.channel] =
                         sourceData[(ny * width + nx) * 4 + shift.channel];
@@ -72,8 +92,13 @@ export default {
         chromaYellowX:   { default: 0, min: -20, max: 20 },
         chromaYellowY:   { default: 0, min: -20, max: 20 },
         chromaScale:            { default: 1, min: 1, max: 10 },
-        chromaThreshold:        { default: 0, min: 0, max: 100 },
+        chromaThreshold:        { default: 0,  min: 0,   max: 100 },
         chromaThresholdReverse: { default: false },
+        chromaFade:             { default: 0,   min: 0,   max: 100 },
+        chromaFadeRadius:       { default: 100, min: 1,   max: 100 },
+        chromaFadeInvert:       { default: false },
+        chromaFadeX:            { default: 0,   min: -50, max: 50  },
+        chromaFadeY:            { default: 0,   min: -50, max: 50  },
     },
     enabled: (p) => p.chromaEnabled,
     canvas2d: applyChromaticAberration,

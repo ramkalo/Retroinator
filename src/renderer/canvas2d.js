@@ -67,10 +67,32 @@ export function processCanvas2DStack(stack) {
 
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     let imageDirty = false; // true if we need to putImageData before context effects
+    let didTransform = false; // true if any transform effect ran (to re-get imageData)
 
+    // --- Pass: transform effects (crop, flip, rotate) ---
+    for (const instance of stack) {
+        const effect = getEffect(instance.effectName);
+        if (!effect || effect.pass !== 'transform') continue;
+        if (!effect.enabled(instance.params)) continue;
+        
+        // Ensure canvas reflects current state before transform
+        ctx.putImageData(imageData, 0, 0);
+        
+        // Store canvas dims before potential resize
+        const oldW = canvas.width;
+        const oldH = canvas.height;
+        
+        effect.canvas2d(ctx, instance.params);
+        
+        // Get fresh imageData after transform (handles both resize and any canvas changes)
+        imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+
+    // --- Pass: pre-crt and post imageData effects ---
     for (const instance of stack) {
         const effect = getEffect(instance.effectName);
         if (!effect) continue;
+        if (effect.pass === 'transform') continue; // already handled
         if (!effect.enabled(instance.params)) continue;
 
         if (effect.pass === 'pre-crt' || effect.pass === 'post') {

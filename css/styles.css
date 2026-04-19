@@ -1124,59 +1124,25 @@ input[type="checkbox"] {
     font-size: 0.72rem;
 }
 
-/* Stack footer */
-.stack-footer {
-    padding: 10px 8px;
-    border-top: 1px solid var(--border);
-    flex-shrink: 0;
-}
-
-.stack-footer .btn {
-    width: 100%;
-}
-
-/* Effect picker — inline block between list and footer */
+/* Effect picker — always-visible catalog below the stack list */
 .effect-picker {
     border-top: 1px solid var(--accent);
-    border-bottom: 1px solid var(--accent);
     background: var(--bg-panel);
-    max-height: 300px;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-}
-
-.effect-picker.hidden {
-    display: none;
+    max-height: 40%;
 }
 
 .effect-picker-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    font-size: 0.8rem;
+    padding: 6px 12px;
+    font-size: 0.72rem;
     font-weight: 600;
     letter-spacing: 1px;
     text-transform: uppercase;
+    color: var(--text-dim);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-}
-
-.picker-close-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-family: inherit;
-    transition: color 0.15s;
-}
-
-.picker-close-btn:hover {
-    color: var(--text);
 }
 
 .effect-catalog-list {
@@ -1185,37 +1151,57 @@ input[type="checkbox"] {
     padding: 4px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
 }
 
 .catalog-item {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    padding: 8px 10px;
-    background: transparent;
-    border: 1px solid transparent;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 8px;
     border-radius: 4px;
-    cursor: pointer;
-    font-family: inherit;
-    text-align: left;
-    width: 100%;
-    transition: background 0.15s, border-color 0.15s;
+    transition: background 0.15s;
 }
 
 .catalog-item:hover {
     background: var(--bg-input);
-    border-color: var(--border);
+}
+
+.catalog-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
 }
 
 .catalog-item-label {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: 600;
     color: var(--text);
 }
 
 .catalog-item-desc {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     color: var(--text-dim);
+}
+
+.catalog-item-add {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 1rem;
+    line-height: 1;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.catalog-item-add:hover {
+    color: var(--text);
+    border-color: var(--accent);
+    background: var(--bg-input);
 }

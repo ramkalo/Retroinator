@@ -23,17 +23,43 @@ function applyVHS(imageData, p = params) {
     }
 
     if (p.vhsTracking > 0) {
-        const numLines = Math.floor(p.vhsTracking / 15);
-        for (let t = 0; t < numLines; t++) {
-            const lineY  = Math.floor(Math.random() * height);
-            const offset = Math.floor(Math.random() * 30 - 15);
-            for (let x = 0; x < width; x++) {
-                const srcX = Math.max(0, Math.min(width-1, x + offset));
-                const i    = (lineY*width + x)*4;
-                const srcI = (lineY*width + srcX)*4;
-                imageData.data[i]   = imageData.data[srcI];
-                imageData.data[i+1] = imageData.data[srcI+1];
-                imageData.data[i+2] = imageData.data[srcI+2];
+        const numBands  = Math.round(p.vhsTrackingAmount);
+        const thickness = Math.round(p.vhsTrackingThickness);
+        const maxShift  = Math.ceil(p.vhsTracking / 100 * width * 0.2);
+        // LCG seeded RNG — seed controls band spacing
+        let lcgState = ((p.vhsTrackingSeed || 1) * 1664525 + 1013904223) | 0;
+        const lcgNext = () => { lcgState = Math.imul(1664525, lcgState) + 1013904223 | 0; return (lcgState >>> 0) / 4294967296; };
+
+        for (let t = 0; t < numBands; t++) {
+            const bandY = Math.floor(Math.max(0, Math.min(height - thickness, lcgNext() * height)));
+            const hash    = (((t + 1) * 2654435761) >>> 0) % 1000;
+            const shift   = Math.floor((hash / 999 * 2 - 1) * maxShift);
+
+            const color = p.vhsTrackingColor || 'shift';
+
+            for (let dy = 0; dy < thickness; dy++) {
+                const y = Math.min(height - 1, bandY + dy);
+                for (let x = 0; x < width; x++) {
+                    const i = (y * width + x) * 4;
+                    if (color === 'white') {
+                        imageData.data[i] = imageData.data[i + 1] = imageData.data[i + 2] = 255;
+                    } else if (color === 'black') {
+                        imageData.data[i] = imageData.data[i + 1] = imageData.data[i + 2] = 0;
+                    } else if (color === 'noise') {
+                        const n = Math.random() * 255;
+                        imageData.data[i] = imageData.data[i + 1] = imageData.data[i + 2] = n;
+                    } else if (color === 'color') {
+                        imageData.data[i]     = Math.random() * 255;
+                        imageData.data[i + 1] = Math.random() * 255;
+                        imageData.data[i + 2] = Math.random() * 255;
+                    } else {
+                        const srcX = Math.max(0, Math.min(width - 1, x + shift));
+                        const srcI = (y * width + srcX) * 4;
+                        imageData.data[i]     = imageData.data[srcI];
+                        imageData.data[i + 1] = imageData.data[srcI + 1];
+                        imageData.data[i + 2] = imageData.data[srcI + 2];
+                    }
+                }
             }
         }
     }
@@ -54,8 +80,6 @@ function applyVHS(imageData, p = params) {
 // --- VHS timestamp overlay (draws to canvas context) --------------------
 
 export function applyVHSTimestamp(ctx, p = params) {
-    const marginMap = { small: 10, medium: 40, large: 160 };
-    const margin = marginMap[p.vhsTimestampMargin] || 10;
     ctx.font = `${p.vhsTimestampSize}px JetBrains Mono, monospace`;
 
     if (p.vhsTimestampColor === 'black') {
@@ -67,14 +91,9 @@ export function applyVHSTimestamp(ctx, p = params) {
     }
     ctx.lineWidth = 2;
 
-    const ts  = p.vhsTimestamp;
-    const pos = p.vhsTimestampPos;
-    const x = pos.includes('left')
-        ? margin
-        : canvas.width - ctx.measureText(ts).width - margin;
-    const y = pos.includes('top')
-        ? margin + p.vhsTimestampSize
-        : canvas.height - margin;
+    const ts = p.vhsTimestamp;
+    const x = (0.5 + p.vhsTimestampX / 100) * canvas.width;
+    const y = (0.5 - p.vhsTimestampY / 100) * canvas.height;
 
     ctx.strokeText(ts, x, y);
     ctx.fillText(ts, x, y);
@@ -102,7 +121,12 @@ export const vhsEffect = {
     pass: 'pre-crt',
     params: {
         vhsEnabled:  { default: false },
-        vhsTracking: { default: 0, min: 0, max: 100 },
+        vhsTracking:          { default: 0,  min: 0,   max: 100 },
+
+        vhsTrackingThickness: { default: 3,  min: 1,   max: 50  },
+        vhsTrackingAmount:    { default: 2,  min: 2,   max: 20  },
+        vhsTrackingSeed:      { default: 1 },
+        vhsTrackingColor:     { default: 'shift' },
         vhsBleed:    { default: 0, min: 0, max: 20  },
         vhsNoise:    { default: 0, min: 0, max: 100 },
     },
@@ -117,10 +141,10 @@ export const vhsTimestampEffect = {
     params: {
         vhsTimestampEnabled: { default: false },
         vhsTimestamp:        { default: 'DEC 31 1999 11:59:59' },
-        vhsTimestampSize:    { default: 64,           min: 8, max: 512 },
-        vhsTimestampPos:     { default: 'bottom-left' },
+        vhsTimestampSize:    { default: 64,           min: 8,  max: 512 },
+        vhsTimestampX:       { default: 0,             min: -50, max: 50  },
+        vhsTimestampY:       { default: 40,            min: -50, max: 50  },
         vhsTimestampColor:   { default: 'white' },
-        vhsTimestampMargin:  { default: 'small' },
     },
     enabled: (p) => p.vhsTimestampEnabled && !!p.vhsTimestamp,
     canvas2d: applyVHSTimestamp,  // (ctx) => void

@@ -4,12 +4,28 @@ import { saveState } from '../state/undo.js';
 
 // Special UI metadata for params that need non-default rendering
 const PARAM_LABELS = {
+    // transform
+    transformEnabled: 'Enable', rotate90: '90°', rotate180: '180°', rotate270: '270°', flipH: 'Flip H', flipV: 'Flip V',
+    // crop
+    cropEnabled: 'Enable', cropAspect: 'Aspect', cropFlipAspect: 'Flip Aspect', cropX: 'X', cropY: 'Y', cropScale: 'Scale',
+    // blackBox
+    blackBoxEnabled: 'Enable', blackBoxX: 'X', blackBoxY: 'Y', blackBoxW: 'Width', blackBoxH: 'Height', blackBoxAngle: 'Angle',
+    blackBoxFill: 'Fill', blackBoxGrainSize: 'Grain Size', blackBoxStaticSeed: 'Static',
     // basic
     basicEnabled: 'Enable', brightness: 'Brightness', contrast: 'Contrast',
     saturation: 'Saturation', highlights: 'Highlights', shadows: 'Shadows',
     temperature: 'Temperature', tint: 'Tint',
+    basicFade: 'Fade', basicFadeRadius: 'Radius', basicFadeInvert: 'Invert',
+    basicFadeX: 'Center X', basicFadeY: 'Center Y',
     // grain
     grainEnabled: 'Enable', grainIntensity: 'Intensity', grainSize: 'Grain Size',
+    // glow
+    glowEnabled: 'Enable', glowThreshold: 'Threshold', glowRadius: 'Radius', glowIntensity: 'Intensity', glowFade: 'Fade', glowFadeX: 'Fade X', glowFadeY: 'Fade Y',
+    // blur
+    blurEnabled: 'Enable', blurMode: 'Mode', blurRadius: 'Blur Radius',
+    blurMajor: 'Major Axis', blurMinor: 'Minor Axis', blurAngle: 'Angle',
+    blurCenterX: 'Center X', blurCenterY: 'Center Y',
+    blurEdge: 'Edge Blur', blurCenter: 'Center Blur',
     // vignette
     vignetteEnabled: 'Enable', vignetteMode: 'Mode', vignetteMajor: 'Major Axis',
     vignetteMinor: 'Minor Axis', vignetteAngle: 'Angle', vignetteEdge: 'Edge Brightness',
@@ -20,6 +36,7 @@ const PARAM_LABELS = {
     chromaBlueX: 'Blue X', chromaBlueY: 'Blue Y', chromaCyanX: 'Cyan X', chromaCyanY: 'Cyan Y',
     chromaMagentaX: 'Magenta X', chromaMagentaY: 'Magenta Y', chromaYellowX: 'Yellow X', chromaYellowY: 'Yellow Y',
     chromaThreshold: 'Threshold', chromaThresholdReverse: 'Reverse Threshold',
+    chromaFade: 'Fade', chromaFadeRadius: 'Fade Radius', chromaFadeInvert: 'Invert Fade', chromaFadeX: 'Fade X', chromaFadeY: 'Fade Y',
     // invert
     invertEnabled: 'Enable', invertMode: 'Mode', invertTarget: 'Target',
     invertIntensity: 'Threshold', invertReverse: 'Reverse Threshold',
@@ -28,34 +45,52 @@ const PARAM_LABELS = {
     // pixelArt
     pixelArtEnabled: 'Enable', pixelSize: 'Pixel Size', pixelColors: '# Colors',
     // vhs
-    vhsEnabled: 'Enable', vhsTracking: 'Tracking', vhsBleed: 'Color Bleed', vhsNoise: 'Noise',
+    vhsEnabled: 'Enable', vhsTracking: 'Shift', vhsTrackingThickness: 'Thickness', vhsTrackingAmount: 'Amount', vhsTrackingSeed: 'Spacing', vhsTrackingColor: 'Line Color', vhsBleed: 'Color Bleed', vhsNoise: 'Noise',
     // vhsTimestamp
     vhsTimestampEnabled: 'Enable', vhsTimestamp: 'Text', vhsTimestampSize: 'Size',
-    vhsTimestampPos: 'Position', vhsTimestampColor: 'Color', vhsTimestampMargin: 'Margin',
+    vhsTimestampX: 'X', vhsTimestampY: 'Y', vhsTimestampColor: 'Color',
     // waves
     wavesEnabled: 'Enable', wavesR: 'Red', wavesG: 'Green', wavesB: 'Blue', wavesPhase: 'Phase',
     // crt
-    crtEnabled: 'Enable', crtCurvature: 'Curvature', crtCurvatureRadius: 'Radius',
+    crtCurvatureEnabled: 'Enable', crtCurvature: 'Curvature', crtCurvatureRadius: 'Radius',
     crtCurvatureIntensity: 'Intensity', crtCurvatureX: 'Center X', crtCurvatureY: 'Center Y',
-    crtScanline: 'Scanline', crtScanSpacing: 'Scan Spacing', crtWaves: 'Waves',
-    crtWavePhase: 'Wave Phase', crtStatic: 'Static', crtStaticType: 'Static Type',
+    crtScanlineEnabled: 'Enable', crtScanline: 'Scanline', crtScanSpacing: 'Scan Spacing',
+    crtStaticEnabled: 'Enable', crtStatic: 'Static', crtStaticType: 'Static Type',
     // doubleExposure
     doubleExposureEnabled: 'Enable', doubleExposureChannelMode: 'Channels',
     doubleExposureBlendMode: 'Blend Mode', doubleExposureIntensity: 'Threshold',
     doubleExposureReverse: 'Reverse Threshold',
+    // chanSat
+    chanSatEnabled: 'Enable', chanSatRed: 'Red', chanSatGreen: 'Green', chanSatBlue: 'Blue',
+    chanSatThreshold: 'Min Saturation', chanSatAmount: 'Saturation', chanSatBlend: 'Blend',
 };
 
 // Select options for enum params
 const PARAM_OPTIONS = {
+    cropAspect: [['original', 'Original'], ['1:1', '1:1 (Square)'], ['4:3', '4:3'], ['16:9', '16:9'], ['3:2', '3:2']],
+    blurMode:     [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
     vignetteMode: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
     invertMode: [['all', 'All Colors'], ['rc', 'Red ↔ Cyan'], ['gm', 'Green ↔ Magenta'], ['by', 'Blue ↔ Yellow'], ['bw', 'Black vs White']],
     invertTarget: [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']],
-    vhsTimestampPos: [['top-left', 'Top Left'], ['top-right', 'Top Right'], ['bottom-left', 'Bottom Left'], ['bottom-right', 'Bottom Right']],
+    vhsTrackingColor: [['shift', 'Shift (default)'], ['white', 'White'], ['black', 'Black'], ['noise', 'Noise'], ['color', 'Color Noise']],
     vhsTimestampColor: [['white', 'White'], ['black', 'Black']],
-    vhsTimestampMargin: [['small', 'Small (10px)'], ['medium', 'Medium (40px)'], ['large', 'Large (160px)']],
     crtStaticType: [['white', 'White'], ['color', 'Color'], ['luma', 'Luma']],
     doubleExposureChannelMode: [['all', 'All'], ['r', 'R only'], ['g', 'G only'], ['b', 'B only'], ['rg', 'R + G'], ['rb', 'R + B'], ['gb', 'G + B']],
     doubleExposureBlendMode: [['screen', 'Screen'], ['multiply', 'Multiply'], ['add', 'Add'], ['overlay', 'Overlay'], ['difference', 'Difference']],
+    blackBoxFill: [
+        ['black', 'Black'],
+        ['white', 'White'],
+        ['red', 'Red'],
+        ['green', 'Green'],
+        ['blue', 'Blue'],
+        ['cyan', 'Cyan'],
+        ['yellow', 'Yellow'],
+        ['magenta', 'Magenta'],
+        ['random', 'Random'],
+        ['bw', 'B&W'],
+        ['image', 'Image'],
+        ['image-static', 'Image Static'],
+    ],
 };
 
 export function buildControlsPanel() {
@@ -71,6 +106,7 @@ export function buildControlsPanel() {
     // Global collapse/expand toolbar
     const toolbar = document.createElement('div');
     toolbar.className = 'controls-toolbar';
+
     const collapseAllBtn = document.createElement('button');
     collapseAllBtn.className = 'btn btn-sm';
     collapseAllBtn.textContent = 'Collapse All';
@@ -80,7 +116,27 @@ export function buildControlsPanel() {
         sections.forEach(s => s.classList.toggle('collapsed', !allCollapsed));
         collapseAllBtn.textContent = allCollapsed ? 'Collapse All' : 'Expand All';
     });
+
+    const enabledEntries = stack
+        .map(inst => ({ inst, key: Object.keys(getEffect(inst.effectName)?.params ?? {}).find(k => k.endsWith('Enabled')) }))
+        .filter(e => e.key !== undefined);
+    const allOn = enabledEntries.length > 0 && enabledEntries.every(e => e.inst.params[e.key]);
+
+    const allOnLabel = document.createElement('label');
+    allOnLabel.className = 'checkbox-label';
+    allOnLabel.style.cssText = 'margin-left:8px;font-size:0.8rem;';
+    const allOnCheck = document.createElement('input');
+    allOnCheck.type = 'checkbox';
+    allOnCheck.checked = allOn;
+    allOnCheck.addEventListener('change', () => {
+        saveState();
+        enabledEntries.forEach(({ inst, key }) => setInstanceParam(inst.id, key, allOnCheck.checked));
+    });
+    allOnLabel.appendChild(allOnCheck);
+    allOnLabel.appendChild(document.createTextNode(' All On'));
+
     toolbar.appendChild(collapseAllBtn);
+    toolbar.appendChild(allOnLabel);
     container.appendChild(toolbar);
 
     // Count occurrences for duplicate labeling
@@ -147,28 +203,9 @@ export function buildControlsPanel() {
 
         for (const [key, schema] of Object.entries(effect.params)) {
             if (key === enabledKey) continue; // already shown in header
+            if (key === 'rotate180' || key === 'rotate270') continue; // handled by rotate90
             const controlEl = buildControl(inst, key, schema);
             if (controlEl) content.appendChild(controlEl);
-        }
-
-        // VHS Timestamp "Now" button
-        if (inst.effectName === 'vhsTimestamp') {
-            const row = document.createElement('div');
-            row.className = 'control-group';
-            const nowBtn = document.createElement('button');
-            nowBtn.className = 'btn';
-            nowBtn.textContent = 'Set to Now';
-            nowBtn.style.cssText = 'padding:4px 8px;font-size:0.75rem;margin-top:4px;';
-            nowBtn.addEventListener('click', () => {
-                const now = new Date();
-                const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-                const ts = `${months[now.getMonth()]} ${String(now.getDate()).padStart(2,'0')} ${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-                setInstanceParam(inst.id, 'vhsTimestamp', ts);
-                const input = content.querySelector('[data-inst-param="vhsTimestamp"]');
-                if (input) input.value = ts;
-            });
-            row.appendChild(nowBtn);
-            content.appendChild(row);
         }
 
         // Double exposure load image button
@@ -195,6 +232,51 @@ export function buildControlsPanel() {
 function buildControl(inst, key, schema) {
     const label = PARAM_LABELS[key] || key;
     const currentVal = inst.params[key];
+
+    // Rotate checkboxes (radio-like - only one can be checked)
+    if (key === 'rotate90') {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+        
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        
+        const rotations = [
+            { key: 'rotate90', label: '90°' },
+            { key: 'rotate180', label: '180°' },
+            { key: 'rotate270', label: '270°' },
+        ];
+        
+        for (const r of rotations) {
+            const wrapper = document.createElement('label');
+            wrapper.className = 'checkbox-label';
+            wrapper.style.marginRight = '12px';
+            
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = inst.params[r.key];
+            checkbox.addEventListener('change', () => {
+                saveState();
+                if (checkbox.checked) {
+                    for (const r2 of rotations) {
+                        setInstanceParam(inst.id, r2.key, r2.key === r.key);
+                    }
+                } else {
+                    for (const r2 of rotations) {
+                        setInstanceParam(inst.id, r2.key, false);
+                    }
+                }
+                buildControlsPanel();
+            });
+            
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(document.createTextNode(' ' + r.label));
+            row.appendChild(wrapper);
+        }
+        
+        group.appendChild(row);
+        return group;
+    }
 
     // Boolean → checkbox
     if (schema.default === false || schema.default === true) {
@@ -241,6 +323,28 @@ function buildControl(inst, key, schema) {
         return group;
     }
 
+    // Seed → Randomize button
+    if (key === 'vhsTrackingSeed' || key === 'blackBoxStaticSeed') {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        const labelEl = document.createElement('span');
+        labelEl.className = 'control-label';
+        labelEl.textContent = label;
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sm';
+        btn.textContent = 'Randomize';
+        btn.addEventListener('click', () => {
+            saveState();
+            setInstanceParam(inst.id, key, Math.floor(Math.random() * 99998) + 1);
+        });
+        row.appendChild(labelEl);
+        row.appendChild(btn);
+        group.appendChild(row);
+        return group;
+    }
+
     // String (free-text) → text input
     if (typeof schema.default === 'string') {
         const group = document.createElement('div');
@@ -260,6 +364,23 @@ function buildControl(inst, key, schema) {
         });
         row.appendChild(labelEl);
         row.appendChild(input);
+        
+        // Add "Now" button for vhsTimestamp
+        if (key === 'vhsTimestamp') {
+            const nowBtn = document.createElement('button');
+            nowBtn.className = 'btn';
+            nowBtn.textContent = 'Now';
+            nowBtn.style.cssText = 'padding:2px 6px;font-size:0.7rem;margin-left:4px;';
+            nowBtn.addEventListener('click', () => {
+                const now = new Date();
+                const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+                const ts = `${months[now.getMonth()]} ${String(now.getDate()).padStart(2,'0')} ${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+                setInstanceParam(inst.id, key, ts);
+                input.value = ts;
+            });
+            row.appendChild(nowBtn);
+        }
+        
         group.appendChild(row);
         return group;
     }

@@ -1,62 +1,83 @@
-# Retroinator
+# Glitchinator
 
-A browser-based image processing tool with retro effects. Works offline — no server required.
+Browser-based image editor with retro VFX effects. Works offline via PWA.
 
-**Live Demo:** https://flipflopverb.github.io/Retroinator/
-
-## Features
-
-- **Basic Adjustments** — Brightness, Contrast, Saturation, Highlights, Shadows, Temperature, Tint
-- **Digitize** — Ordered dithering, random noise
-- **Invert** — Full color invert or channel-specific (Red↔Cyan, Green↔Magenta, Blue↔Yellow, Black vs White)
-- **Film Grain** — Add retro film grain texture
-- **Pixel Art** — Adjustable pixel size and color palette
-- **Chromatic Aberration** — Independent RGB channel offset controls
-- **Vignette** — Radial darkening effect
-- **VHS Effect** — Tracking errors, color bleed, noise, customizable timestamp
-- **CRT Effect** — Scanlines, curvature, RGB wave distortion, static noise
-
-## Usage
-
-### Run Locally
+## Run
 
 ```bash
-# Just open the file in your browser
-open index.html
-
-# Or use any local server
-python3 -m http.server 8000
-# Then visit http://localhost:8000
+npm run dev      # Start dev server
+npm run build    # Build for production
+npm run preview # Preview production build
 ```
 
-### Run on GitHub Pages
+## Architecture
 
-1. Fork or clone this repository
-2. Go to **Settings → Pages**
-3. Set Source to `main` branch and root folder
-4. Your app will be live at `https://yourusername.github.io/Retroinator/`
+### Effect Stack
+The app uses an ordered stack of effects. Each effect is applied in sequence to the image.
 
-## Presets
+- **src/state/effectStack.js** — Stack CRUD, stores effect instances
+- **src/effects/registry.js** — Effect definitions (EFFECTS array, EFFECT_CATALOG)
 
-Save your favorite settings as presets (stored in browser localStorage or exportable as JSON).
+### Processing Pipeline
+- **src/renderer/pipeline.js** — Main processing entry, debounced
+- **src/renderer/canvas2d.js** — Canvas 2D effect rendering
+- **src/renderer/webgl.js** — WebGL fallback rendering
+- **src/renderer/glstate.js** — WebGL state management
 
-## Keyboard Shortcuts
+### Effect Module Structure
+Each effect in `src/effects/` exports an object:
+```js
+{
+  name: 'effectName',
+  label: 'Effect Label',
+  pass: 'pre-crt', // transform|pre-crt|context|post
+  params: { key: { default: 0, min: -100, max: 100 } },
+  canvas2d(ctx, params, imageData) { /* ... */ }
+}
+```
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+O` | Open image |
-| `Ctrl+E` | Export image |
-| `Ctrl+S` | Save preset |
-| `Ctrl+Shift+S` | Open preset manager |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Shift+Z` | Redo |
+## Available Effects
 
-## Technical Details
+| Effect | File | Description |
+|--------|------|-------------|
+| Basic Adjustments | basic.js | Brightness, contrast, saturation, highlights, shadows, temperature, tint |
+| Black Box | blackBox.js | Solid black rectangle censor bar |
+| Chromatic Aberration | chroma.js | RGB channel offset |
+| CRT Curvature | crtCurvature.js | Barrel distortion |
+| CRT Scanlines | crtScanlines.js | Horizontal scanline darkening |
+| CRT Static | crtStatic.js | Random noise overlay |
+| Crop | crop.js | Image cropping |
+| Digitize | digitize.js | Ordered dithering, digital noise |
+| Double Exposure | doubleExposure.js | Blend two images |
+| Film Grain | grain.js | Analog noise texture |
+| Glow | glow.js | Bloom halo effect |
+| Invert | invert.js | Color inversion |
+| Pixel Art | pixelArt.js | Pixel size reduction, color quantization |
+| Rotate | transform.js | Flip and rotate |
+| VHS Effect | vhs.js | Tracking errors, color bleed, noise |
+| VHS Timestamp | vhs.js | Timestamp text overlay |
+| Vignette | vignette.js | Radial edge darkening |
+| Waves | waves.js | Wave distortion per channel |
 
-- Works completely offline once loaded
-- All processing happens in-browser (your images stay private)
-- Uses WebGL for GPU-accelerated image processing
+## Adding a New Effect
 
-## License
+1. Create `src/effects/myEffect.js` with effect definition object
+2. Import and add to `EFFECTS` array in `src/effects/registry.js`
+3. Effect auto-appears in UI catalog via `EFFECT_CATALOG`
 
-MIT
+## Key Files
+
+- `src/main.js` — Entry point, UI event handlers
+- `src/effects/registry.js` — Effect definitions, param schemas
+- `src/state/params.js` — Global params state
+- `src/state/effectStack.js` — Effect stack state
+- `src/ui/stackPanel.js` — Effect list UI
+- `src/ui/controls.js` — Slider controls generation
+
+## Tech Stack
+
+- Vite — Build tool
+- Canvas 2D — Primary rendering pipeline
+- WebGL — GPU fallback
+- PWA — Offline support
+- Capacitor — Mobile app wrapper

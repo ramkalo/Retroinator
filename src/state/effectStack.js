@@ -23,7 +23,15 @@ export function getStack() {
 export function addEffect(effectName) {
     const defaults = getEffectDefaults(effectName);
     if (!defaults) return null;
+    
+    const effect = EFFECTS.find(e => e.name === effectName);
+    const enabledKey = Object.keys(effect?.params || {}).find(k => 
+        k.endsWith('Enabled') && typeof defaults[k] === 'boolean'
+    );
+    
     const instance = { id: _uid(), effectName, params: { ...defaults } };
+    if (enabledKey) instance.params[enabledKey] = true;
+    
     _stack.push(instance);
     _notify();
     return instance;

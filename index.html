@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Retroinator</title>
+    <title>Glitchinator</title>
 
     <!-- PWA theme & icons -->
     <meta name="theme-color" content="#0a0a1a">
@@ -25,7 +25,7 @@
 <body>
     <div class="app-container">
         <header class="header">
-            <span class="logo">RETROINATOR</span>
+            <span class="logo">GLITCHINATOR</span>
             <button class="mobile-menu-toggle sidebar-toggle" id="sidebarToggle">&#9881;</button>
             <div class="toolbar">
                 <div class="toolbar-group">
@@ -46,8 +46,10 @@
         
         <div class="main-content">
             <div class="canvas-area">
-                <div class="process-indicator" id="processIndicator">Processing...</div>
                 <div class="canvas-wrapper" id="canvasWrapper">
+                    <div class="process-indicator" id="processIndicator">
+                        <div class="process-spinner"></div>
+                    </div>
                     <canvas id="mainCanvas"></canvas>
                     <canvas id="overlayCanvas" aria-hidden="true"></canvas>
                     <div class="drop-zone" id="dropZone">
@@ -86,17 +88,9 @@
                     <div id="effectStackList" class="effect-stack-list">
                         <div class="stack-empty">No effects added yet.<br>Click + Add Effect to start.</div>
                     </div>
-                    <!-- Effect Picker — inline, appears above the add button -->
-                    <div id="effectPicker" class="effect-picker hidden">
-                        <div class="effect-picker-header">
-                            <span>Choose Effect</span>
-                            <button class="picker-close-btn" id="effectPickerClose">&#10005;</button>
-                        </div>
+                    <div id="effectPicker" class="effect-picker">
+                        <div class="effect-picker-header"><span>Add Effect</span></div>
                         <div id="effectCatalogList" class="effect-catalog-list"></div>
-                    </div>
-
-                    <div class="stack-footer">
-                        <button class="btn btn-primary" id="addEffectBtn">+ Add Effect</button>
                     </div>
                 </div>
 

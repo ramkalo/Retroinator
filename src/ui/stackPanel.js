@@ -6,31 +6,25 @@ let _onRebuild = null;
 
 export function initStackPanel(onRebuild) {
     _onRebuild = onRebuild;
-    document.getElementById('addEffectBtn').addEventListener('click', togglePicker);
-    document.getElementById('effectPickerClose').addEventListener('click', closePicker);
     renderCatalog();
-}
-
-function togglePicker() {
-    const picker = document.getElementById('effectPicker');
-    picker.classList.toggle('hidden');
-}
-
-function closePicker() {
-    document.getElementById('effectPicker').classList.add('hidden');
 }
 
 function renderCatalog() {
     const list = document.getElementById('effectCatalogList');
     list.innerHTML = '';
     for (const entry of EFFECT_CATALOG) {
-        const item = document.createElement('button');
+        const item = document.createElement('div');
         item.className = 'catalog-item';
-        item.innerHTML = `<span class="catalog-item-label">${entry.label}</span><span class="catalog-item-desc">${entry.description}</span>`;
-        item.addEventListener('click', () => {
+        item.innerHTML = `
+            <div class="catalog-item-info">
+                <span class="catalog-item-label">${entry.label}</span>
+                <span class="catalog-item-desc">${entry.description}</span>
+            </div>
+            <button class="catalog-item-add" title="Add ${entry.label}">+</button>
+        `;
+        item.querySelector('.catalog-item-add').addEventListener('click', () => {
             saveState();
             addEffect(entry.name);
-            closePicker();
             renderStackList();
             if (_onRebuild) _onRebuild();
         });
@@ -44,7 +38,7 @@ export function renderStackList() {
     const stack = getStack();
 
     if (stack.length === 0) {
-        container.innerHTML = '<div class="stack-empty">No effects added yet.<br>Click + Add Effect to start.</div>';
+        container.innerHTML = '<div class="stack-empty">No effects added yet.<br>Use the list below to add one.</div>';
         return;
     }
 

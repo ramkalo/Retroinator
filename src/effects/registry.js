@@ -1,14 +1,22 @@
+import blackBoxEffect       from './blackBox.js';
 import doubleExposureEffect from './doubleExposure.js';
 import basicEffect          from './basic.js';
 import digitizeEffect       from './digitize.js';
 import grainEffect          from './grain.js';
 import pixelArtEffect       from './pixelArt.js';
 import chromaEffect         from './chroma.js';
+import chanSatEffect        from './chanSat.js';
 import vignetteEffect       from './vignette.js';
-import invertEffect         from './invert.js';
+import blurEffect           from './blur.js';
+import invertEffect          from './invert.js';
 import { vhsEffect, vhsTimestampEffect } from './vhs.js';
 import wavesEffect          from './waves.js';
-import crtEffect            from './crt.js';
+import crtCurvatureEffect   from './crtCurvature.js';
+import crtScanlinesEffect   from './crtScanlines.js';
+import crtStaticEffect      from './crtStatic.js';
+import transformEffect      from './transform.js';
+import cropEffect           from './crop.js';
+import glowEffect           from './glow.js';
 
 /**
  * Master ordered list of all effects.
@@ -17,26 +25,35 @@ import crtEffect            from './crt.js';
  *   { name, label, pass, params, enabled(p), canvas2d }
  *
  * pass values:
- *   'pre-crt'  — imageData effect, applied before any context drawing
- *   'context'  — draws directly to the 2D canvas context (e.g. text overlays)
- *   'post'     — imageData effect, applied after context effects
+ *   'transform' — canvas transform (crop, flip, rotate), applied first
+ *   'pre-crt'   — imageData effect, applied before any context drawing
+ *   'context'   — draws directly to the 2D canvas context (e.g. text overlays)
+ *   'post'      — imageData effect, applied after context effects
  *
  * To add a new effect: create src/effects/myEffect.js, import it here,
  * add it to EFFECTS in the correct position. That's it.
  */
 export const EFFECTS = [
+    transformEffect,
+    cropEffect,
+    blackBoxEffect,
     doubleExposureEffect,
     basicEffect,
     digitizeEffect,
     grainEffect,
     pixelArtEffect,
     chromaEffect,
+    chanSatEffect,
     vignetteEffect,
+    blurEffect,
+    glowEffect,
     invertEffect,
     vhsEffect,
     vhsTimestampEffect,
     wavesEffect,
-    crtEffect,
+    crtCurvatureEffect,
+    crtScanlinesEffect,
+    crtStaticEffect,
 ];
 
 // ---------------------------------------------------------------------------
@@ -81,18 +98,26 @@ export function buildControlLimits() {
  * Each entry: { name, label, description }
  */
 export const EFFECT_CATALOG = [
-    { name: 'basic',          label: 'Basic Adjustments',   description: 'Brightness, contrast, saturation, and color' },
-    { name: 'grain',          label: 'Film Grain',           description: 'Analog noise and grain texture' },
-    { name: 'vignette',       label: 'Vignette',             description: 'Edge darkening or brightening' },
+    { name: 'basic',          label: 'Basic Adjustments',    description: 'Brightness, contrast, saturation, and color' },
+    { name: 'blackBox',       label: 'Black Box',            description: 'Solid black rectangle / censor bar' },
+    { name: 'blur',           label: 'Blur',                 description: 'Gaussian blur shaped like a vignette — sharp center, soft edges' },
+    { name: 'chanSat',        label: 'Channel Saturation',   description: 'Target R, G, or B dominant pixels and boost or drain their saturation' },
     { name: 'chroma',         label: 'Chromatic Aberration', description: 'RGB channel separation glitch' },
-    { name: 'invert',         label: 'Invert',               description: 'Color inversion with threshold' },
+    { name: 'crop',           label: 'Crop',                 description: 'Crop the image' },
+    { name: 'crtCurvature',   label: 'CRT Curvature',        description: 'Barrel lens distortion' },
+    { name: 'crtScanlines',   label: 'CRT Scanlines',        description: 'Horizontal scanline darkening' },
+    { name: 'crtStatic',      label: 'CRT Static',           description: 'Random noise over the image' },
     { name: 'digitize',       label: 'Digitize',             description: 'Dithering and digital noise' },
+    { name: 'doubleExposure', label: 'Double Exposure',      description: 'Blend two images together' },
+    { name: 'grain',          label: 'Film Grain',           description: 'Analog noise and grain texture' },
+    { name: 'glow',           label: 'Glow',                 description: 'Bloom halo around bright areas' },
+    { name: 'invert',         label: 'Invert',               description: 'Color inversion with threshold' },
     { name: 'pixelArt',       label: 'Pixel Art',            description: 'Pixel size reduction and color quantization' },
+    { name: 'transform',      label: 'Rotate',               description: 'Flip and rotate' },
     { name: 'vhs',            label: 'VHS Effect',           description: 'Tracking, color bleed, and VHS noise' },
     { name: 'vhsTimestamp',   label: 'VHS Timestamp',        description: 'Retro timestamp text overlay' },
+    { name: 'vignette',       label: 'Vignette',             description: 'Edge darkening or brightening' },
     { name: 'waves',          label: 'Waves',                description: 'Wave distortion per color channel' },
-    { name: 'crt',            label: 'CRT Effect',           description: 'Curvature, scanlines, and static' },
-    { name: 'doubleExposure', label: 'Double Exposure',      description: 'Blend two images together' },
 ];
 
 /**
