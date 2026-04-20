@@ -42,6 +42,16 @@ export function removeEffect(id) {
     _notify();
 }
 
+export function duplicateEffect(id) {
+    const inst = _stack.find(i => i.id === id);
+    if (!inst) return null;
+    const copy = { id: _uid(), effectName: inst.effectName, params: { ...inst.params } };
+    const idx = _stack.findIndex(i => i.id === id);
+    _stack.splice(idx + 1, 0, copy);
+    _notify();
+    return copy;
+}
+
 export function moveEffect(id, newIndex) {
     const idx = _stack.findIndex(inst => inst.id === id);
     if (idx === -1) return;

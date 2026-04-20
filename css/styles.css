@@ -101,6 +101,33 @@ body {
     cursor: not-allowed;
 }
 
+.stack-dup-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    padding: 2px 5px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    border-radius: 3px;
+}
+
+.stack-dup-btn:hover {
+    background: var(--bg-input);
+    color: var(--accent);
+}
+
+.stack-enable-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    cursor: pointer;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
 .main-content {
     display: flex;
     flex: 1;
@@ -193,8 +220,18 @@ body {
     width: 380px;
     background: var(--bg-panel);
     border-left: 2px solid var(--border);
-    overflow-y: auto;
-    max-height: calc(100vh - 60px);
+    overflow: hidden;
+    height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-controls {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 .tool-section {
@@ -376,20 +413,28 @@ input[type="checkbox"] {
     border-bottom: 1px solid var(--border);
 }
 
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .process-indicator {
     position: absolute;
-    top: 10px;
-    left: 10px;
-    background: var(--accent);
-    color: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 0.75rem;
+    inset: 0;
     display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 10;
+    pointer-events: none;
 }
 
-.process-indicator.visible {
-    display: block;
+.process-indicator.visible { display: flex; }
+
+.process-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
 }
 
 #fileInput {
@@ -729,10 +774,14 @@ input[type="checkbox"] {
     /* Scrollable content area inside the sheet */
     .sidebar-controls {
         flex: 1;
-        overflow-y: auto;
+        overflow: hidden;
+        min-height: 0;
+    }
+
+    .effect-stack-list,
+    .controls-scroll-area {
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
-        min-height: 0;
     }
 
     /* ── Adjust pill ─────────────────────────────────────────────────── */
@@ -844,7 +893,7 @@ input[type="checkbox"] {
 
     .sidebar-controls {
         flex: 1;
-        overflow-y: auto;
+        overflow: hidden;
         min-height: 0;
     }
 }
@@ -995,6 +1044,8 @@ input[type="checkbox"] {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    flex: 1;
+    overflow: hidden;
 }
 
 .panel-view.hidden {
@@ -1002,6 +1053,15 @@ input[type="checkbox"] {
 }
 
 /* Effect stack list */
+.stack-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    font-size: 0.8rem;
+}
+
 .effect-stack-list {
     flex: 1;
     padding: 8px;
@@ -1009,6 +1069,7 @@ input[type="checkbox"] {
     flex-direction: column;
     gap: 4px;
     min-height: 60px;
+    overflow-y: auto;
 }
 
 .stack-empty {
@@ -1117,6 +1178,12 @@ input[type="checkbox"] {
     padding: 6px 8px 4px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+}
+
+.controls-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
 }
 
 .btn-sm {

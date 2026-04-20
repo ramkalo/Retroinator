@@ -1,5 +1,5 @@
-import { EFFECT_CATALOG } from '../effects/registry.js';
-import { getStack, addEffect, removeEffect, moveEffect } from '../state/effectStack.js';
+import { EFFECT_CATALOG, getEffect } from '../effects/registry.js';
+import { getStack, addEffect, removeEffect, moveEffect, duplicateEffect, setInstanceParam } from '../state/effectStack.js';
 import { saveState } from '../state/undo.js';
 
 let _onRebuild = null;
@@ -37,6 +37,29 @@ export function renderStackList() {
     container.innerHTML = '';
     const stack = getStack();
 
+    // All On toolbar
+    const toolbar = document.getElementById('stackToolbar');
+    toolbar.innerHTML = '';
+    if (stack.length > 0) {
+        const enabledEntries = stack
+            .map(inst => ({ inst, key: Object.keys(getEffect(inst.effectName)?.params ?? {}).find(k => k.endsWith('Enabled')) }))
+            .filter(e => e.key !== undefined);
+        const allOn = enabledEntries.length > 0 && enabledEntries.every(e => e.inst.params[e.key]);
+
+        const allOnLabel = document.createElement('label');
+        allOnLabel.className = 'checkbox-label';
+        const allOnCheck = document.createElement('input');
+        allOnCheck.type = 'checkbox';
+        allOnCheck.checked = allOn;
+        allOnCheck.addEventListener('change', () => {
+            saveState();
+            enabledEntries.forEach(({ inst, key }) => setInstanceParam(inst.id, key, allOnCheck.checked));
+        });
+        allOnLabel.appendChild(allOnCheck);
+        allOnLabel.appendChild(document.createTextNode(' All On'));
+        toolbar.appendChild(allOnLabel);
+    }
+
     if (stack.length === 0) {
         container.innerHTML = '<div class="stack-empty">No effects added yet.<br>Use the list below to add one.</div>';
         return;
@@ -71,9 +94,30 @@ export function renderStackList() {
             <div class="stack-item-actions">
                 <button class="stack-move-btn" data-dir="up" title="Move up">&#8593;</button>
                 <button class="stack-move-btn" data-dir="down" title="Move down">&#8595;</button>
+                <button class="stack-dup-btn" title="Duplicate">&#10697;</button>
                 <button class="stack-delete-btn" title="Remove">&#10005;</button>
             </div>
         `;
+
+        // On/Off checkbox
+        const effect = getEffect(inst.effectName);
+        const enabledKey = effect && Object.keys(effect.params).find(k =>
+            k.endsWith('Enabled') && typeof effect.params[k].default === 'boolean'
+        );
+        if (enabledKey !== undefined) {
+            const enableLabel = document.createElement('label');
+            enableLabel.className = 'stack-enable-label';
+            enableLabel.addEventListener('click', e => e.stopPropagation());
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = inst.params[enabledKey];
+            checkbox.addEventListener('change', () => {
+                saveState();
+                setInstanceParam(inst.id, enabledKey, checkbox.checked);
+            });
+            enableLabel.appendChild(checkbox);
+            item.querySelector('.stack-item-label').after(enableLabel);
+        }
 
         // Move up/down buttons
         item.querySelectorAll('.stack-move-btn').forEach(btn => {
@@ -86,6 +130,15 @@ export function renderStackList() {
                 renderStackList();
                 if (_onRebuild) _onRebuild();
             });
+        });
+
+        // Duplicate button
+        item.querySelector('.stack-dup-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            saveState();
+            duplicateEffect(inst.id);
+            renderStackList();
+            if (_onRebuild) _onRebuild();
         });
 
         // Delete button

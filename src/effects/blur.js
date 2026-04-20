@@ -1,59 +1,63 @@
 import { params } from '../state/params.js';
 
-function gaussianKernel(radius) {
-    const sigma = Math.max(1, radius / 2);
-    const size = 2 * radius + 1;
-    const k = new Float32Array(size);
-    let sum = 0;
-    for (let i = 0; i < size; i++) {
-        const x = i - radius;
-        k[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
-        sum += k[i];
-    }
-    for (let i = 0; i < size; i++) k[i] /= sum;
-    return k;
-}
-
-function gaussianBlur(src, width, height, radius) {
-    const k = gaussianKernel(radius);
+function boxBlur(src, width, height, radius, passes) {
+    const count = 2 * radius + 1;
+    const current = new Float32Array(src.length);
+    for (let i = 0; i < src.length; i++) current[i] = src[i];
     const tmp = new Float32Array(src.length);
-    const out = new Uint8ClampedArray(src.length);
 
-    // Horizontal pass: src → tmp
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            let r = 0, g = 0, b = 0;
+    for (let pass = 0; pass < passes; pass++) {
+        // Horizontal sweep: current → tmp
+        for (let y = 0; y < height; y++) {
+            let sumR = 0, sumG = 0, sumB = 0;
             for (let d = -radius; d <= radius; d++) {
-                const sx = Math.max(0, Math.min(width - 1, x + d));
+                const sx = Math.max(0, Math.min(width - 1, d));
                 const si = (y * width + sx) * 4;
-                const w = k[d + radius];
-                r += src[si]   * w;
-                g += src[si+1] * w;
-                b += src[si+2] * w;
+                sumR += current[si]; sumG += current[si+1]; sumB += current[si+2];
             }
-            const di = (y * width + x) * 4;
-            tmp[di] = r; tmp[di+1] = g; tmp[di+2] = b;
-        }
-    }
+            for (let x = 0; x < width; x++) {
+                const di = (y * width + x) * 4;
+                tmp[di]   = sumR / count;
+                tmp[di+1] = sumG / count;
+                tmp[di+2] = sumB / count;
+                tmp[di+3] = current[di+3];
 
-    // Vertical pass: tmp → out
-    for (let y = 0; y < height; y++) {
+                const leaveX = Math.max(0, x - radius);
+                const enterX = Math.min(width - 1, x + radius + 1);
+                const li = (y * width + leaveX) * 4;
+                const ei = (y * width + enterX) * 4;
+                sumR += current[ei] - current[li];
+                sumG += current[ei+1] - current[li+1];
+                sumB += current[ei+2] - current[li+2];
+            }
+        }
+
+        // Vertical sweep: tmp → current
         for (let x = 0; x < width; x++) {
-            let r = 0, g = 0, b = 0;
+            let sumR = 0, sumG = 0, sumB = 0;
             for (let d = -radius; d <= radius; d++) {
-                const sy = Math.max(0, Math.min(height - 1, y + d));
+                const sy = Math.max(0, Math.min(height - 1, d));
                 const si = (sy * width + x) * 4;
-                const w = k[d + radius];
-                r += tmp[si]   * w;
-                g += tmp[si+1] * w;
-                b += tmp[si+2] * w;
+                sumR += tmp[si]; sumG += tmp[si+1]; sumB += tmp[si+2];
             }
-            const di = (y * width + x) * 4;
-            out[di] = r; out[di+1] = g; out[di+2] = b; out[di+3] = src[di+3];
+            for (let y = 0; y < height; y++) {
+                const di = (y * width + x) * 4;
+                current[di]   = sumR / count;
+                current[di+1] = sumG / count;
+                current[di+2] = sumB / count;
+
+                const leaveY = Math.max(0, y - radius);
+                const enterY = Math.min(height - 1, y + radius + 1);
+                const li = (leaveY * width + x) * 4;
+                const ei = (enterY * width + x) * 4;
+                sumR += tmp[ei] - tmp[li];
+                sumG += tmp[ei+1] - tmp[li+1];
+                sumB += tmp[ei+2] - tmp[li+2];
+            }
         }
     }
 
-    return out;
+    return new Uint8ClampedArray(current);
 }
 
 function applyBlur(imageData, p = params) {
@@ -61,18 +65,18 @@ function applyBlur(imageData, p = params) {
     const radius = Math.round(p.blurRadius);
     if (radius < 1) return imageData;
 
-    const blurLo = gaussianBlur(data, width, height, Math.max(1, Math.floor(radius / 2)));
-    const blurHi = gaussianBlur(data, width, height, radius);
+    const passes  = Math.round(p.blurPasses ?? 1);
+    const blurFull = boxBlur(data, width, height, radius, passes);
 
-    const mode     = p.blurMode;
-    const angleRad = (p.blurAngle ?? 0) * Math.PI / 180;
-    const cosA     = Math.cos(angleRad);
-    const sinA     = Math.sin(angleRad);
-    const a        = (p.blurMajor / 100) * 0.7071;
-    const b        = (p.blurMinor / 100) * 0.7071;
-    const centerUX = 0.5 + p.blurCenterX / 100;
-    const centerUY = 0.5 - p.blurCenterY / 100;
-    const edgeStr  = p.blurEdge   / 100;
+    const mode      = p.blurMode;
+    const angleRad  = (p.blurAngle ?? 0) * Math.PI / 180;
+    const cosA      = Math.cos(angleRad);
+    const sinA      = Math.sin(angleRad);
+    const a         = (p.blurMajor  / 100) * 0.7071;
+    const b         = (p.blurMinor  / 100) * 0.7071;
+    const centerUX  = 0.5 + p.blurCenterX / 100;
+    const centerUY  = 0.5 - p.blurCenterY / 100;
+    const edgeStr   = p.blurEdge   / 100;
     const centerStr = p.blurCenter / 100;
 
     for (let py = 0; py < height; py++) {
@@ -90,19 +94,10 @@ function applyBlur(imageData, p = params) {
             if (weight <= 0) continue;
 
             const i = (py * width + px) * 4;
-            // Interpolate between adjacent levels to avoid ghosting:
-            // 0–0.5 → original→blurLo, 0.5–1 → blurLo→blurHi
-            if (weight <= 0.5) {
-                const t = weight * 2;
-                data[i]   = data[i]   + (blurLo[i]   - data[i])   * t;
-                data[i+1] = data[i+1] + (blurLo[i+1] - data[i+1]) * t;
-                data[i+2] = data[i+2] + (blurLo[i+2] - data[i+2]) * t;
-            } else {
-                const t = (weight - 0.5) * 2;
-                data[i]   = blurLo[i]   + (blurHi[i]   - blurLo[i])   * t;
-                data[i+1] = blurLo[i+1] + (blurHi[i+1] - blurLo[i+1]) * t;
-                data[i+2] = blurLo[i+2] + (blurHi[i+2] - blurLo[i+2]) * t;
-            }
+            const t = Math.min(weight, 1.0);
+            data[i]   = data[i]   + (blurFull[i]   - data[i])   * t;
+            data[i+1] = data[i+1] + (blurFull[i+1] - data[i+1]) * t;
+            data[i+2] = data[i+2] + (blurFull[i+2] - data[i+2]) * t;
         }
     }
 
@@ -114,16 +109,17 @@ export default {
     label: 'Blur',
     pass:  'pre-crt',
     params: {
+        blurEdge:    { default: 100, min: 0,   max: 100 },
+        blurCenter:  { default: 0,   min: 0,   max: 100 },
         blurEnabled: { default: false },
-        blurMode:    { default: 'ellipse' },
         blurRadius:  { default: 8,   min: 1,   max: 50  },
+        blurPasses:  { default: 1,   min: 1,   max: 3   },
+        blurMode:    { default: 'ellipse' },
         blurMajor:   { default: 100, min: 0,   max: 150 },
         blurMinor:   { default: 100, min: 0,   max: 150 },
         blurAngle:   { default: 0,   min: 0,   max: 180 },
         blurCenterX: { default: 0,   min: -50, max: 50  },
         blurCenterY: { default: 0,   min: -50, max: 50  },
-        blurEdge:    { default: 100, min: 0,   max: 100 },
-        blurCenter:  { default: 0,   min: 0,   max: 100 },
     },
     enabled:  (p) => p.blurEnabled,
     canvas2d: applyBlur,

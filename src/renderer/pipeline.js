@@ -17,10 +17,11 @@ export function processImage() {
     setDebounceTimer(setTimeout(doProcess, 150));
 }
 
-function doProcess() {
+async function doProcess() {
     if (!originalImage || isProcessing) return;
     setIsProcessing(true);
     showProcessIndicator(true);
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 
     const stack = getStack();
 

@@ -22,10 +22,11 @@ const PARAM_LABELS = {
     // glow
     glowEnabled: 'Enable', glowThreshold: 'Threshold', glowRadius: 'Radius', glowIntensity: 'Intensity', glowFade: 'Fade', glowFadeX: 'Fade X', glowFadeY: 'Fade Y',
     // blur
+    blurEdge: 'Edge Intensity', blurCenter: 'Center Intensity',
     blurEnabled: 'Enable', blurMode: 'Mode', blurRadius: 'Blur Radius',
     blurMajor: 'Major Axis', blurMinor: 'Minor Axis', blurAngle: 'Angle',
     blurCenterX: 'Center X', blurCenterY: 'Center Y',
-    blurEdge: 'Edge Blur', blurCenter: 'Center Blur',
+    blurPasses: 'Box Passes',
     // vignette
     vignetteEnabled: 'Enable', vignetteMode: 'Mode', vignetteMajor: 'Major Axis',
     vignetteMinor: 'Minor Axis', vignetteAngle: 'Angle', vignetteEdge: 'Edge Brightness',
@@ -117,27 +118,12 @@ export function buildControlsPanel() {
         collapseAllBtn.textContent = allCollapsed ? 'Collapse All' : 'Expand All';
     });
 
-    const enabledEntries = stack
-        .map(inst => ({ inst, key: Object.keys(getEffect(inst.effectName)?.params ?? {}).find(k => k.endsWith('Enabled')) }))
-        .filter(e => e.key !== undefined);
-    const allOn = enabledEntries.length > 0 && enabledEntries.every(e => e.inst.params[e.key]);
-
-    const allOnLabel = document.createElement('label');
-    allOnLabel.className = 'checkbox-label';
-    allOnLabel.style.cssText = 'margin-left:8px;font-size:0.8rem;';
-    const allOnCheck = document.createElement('input');
-    allOnCheck.type = 'checkbox';
-    allOnCheck.checked = allOn;
-    allOnCheck.addEventListener('change', () => {
-        saveState();
-        enabledEntries.forEach(({ inst, key }) => setInstanceParam(inst.id, key, allOnCheck.checked));
-    });
-    allOnLabel.appendChild(allOnCheck);
-    allOnLabel.appendChild(document.createTextNode(' All On'));
-
     toolbar.appendChild(collapseAllBtn);
-    toolbar.appendChild(allOnLabel);
     container.appendChild(toolbar);
+
+    const scrollArea = document.createElement('div');
+    scrollArea.className = 'controls-scroll-area';
+    container.appendChild(scrollArea);
 
     // Count occurrences for duplicate labeling
     const counts = {};
@@ -174,23 +160,6 @@ export function buildControlsPanel() {
         titleEl.textContent = label;
         header.appendChild(titleEl);
 
-        if (enabledKey !== undefined) {
-            const enableLabel = document.createElement('label');
-            enableLabel.className = 'header-enable-label';
-            enableLabel.addEventListener('click', e => e.stopPropagation());
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = inst.params[enabledKey];
-            checkbox.dataset.instParam = enabledKey;
-            checkbox.addEventListener('change', () => {
-                saveState();
-                setInstanceParam(inst.id, enabledKey, checkbox.checked);
-            });
-            enableLabel.appendChild(checkbox);
-            enableLabel.appendChild(document.createTextNode(' On'));
-            header.appendChild(enableLabel);
-        }
-
         const toggleSpan = document.createElement('span');
         toggleSpan.className = 'tool-toggle';
         toggleSpan.innerHTML = '&#9660;';
@@ -225,7 +194,7 @@ export function buildControlsPanel() {
 
         section.appendChild(header);
         section.appendChild(content);
-        container.appendChild(section);
+        scrollArea.appendChild(section);
     }
 }
 
