@@ -82,7 +82,6 @@ const PARAM_LABELS = {
     matrixRainFont: 'Font',
     matrixRainX: 'X', matrixRainY: 'Y',
     matrixRainColor: 'Color', matrixRainOpacity: 'Opacity',
-    matrixRainGlowEnabled: 'Enable Glow', matrixRainGlowRadius: 'Radius', matrixRainGlowIntensity: 'Intensity',
 };
 
 // Select options for enum params
@@ -136,6 +135,8 @@ const PARAM_OPTIONS = {
         ["'Arial', sans-serif",         'Arial'],
         ["'Georgia', serif",            'Georgia'],
         ["'Times New Roman', serif",    'Times New Roman'],
+        ['neogreekrunic', 'neogreekrunic'],
+        ['splitbitsv2', 'splitbitsv2'],
     ],
     matrixRainColor: [
         ['red', 'Red'], ['green', 'Green'], ['blue', 'Blue'],

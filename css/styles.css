@@ -1,5 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
 
+@font-face {
+    font-family: 'splitbitsv2';
+    src: url('/fonts/splitbitsv2.ttf') format('truetype');
+}
+@font-face {
+    font-family: 'neogreekrunic';
+    src: url('/fonts/neogreekrunic.ttf') format('truetype');
+}
+
 * {
     margin: 0;
     padding: 0;

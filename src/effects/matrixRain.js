@@ -160,9 +160,6 @@ function applyMatrixRain(ctx, p) {
     const order        = p.matrixRainOrder;
     const font         = p.matrixRainFont;
     const opacity      = p.matrixRainOpacity / 100;
-    const glowOn       = p.matrixRainGlowEnabled;
-    const glowRadius   = p.matrixRainGlowRadius;
-    const glowIntensity = p.matrixRainGlowIntensity / 100;
     const colorKey  = p.matrixRainColor;
 
     const charStep = size + charSpacing;  // along flow direction
@@ -234,15 +231,8 @@ function applyMatrixRain(ctx, p) {
         const [x, y] = cellXY(i);
         const color = resolveColor(colorKey, x, y, rngColor, imageCtx);
         ctx.fillStyle = color;
-        if (glowOn) {
-            ctx.shadowBlur  = glowRadius;
-            ctx.shadowColor = color;
-            const extra = Math.max(0, Math.round(glowIntensity - 1));
-            for (let g = 0; g < extra; g++) ctx.fillText(chars[i], x, y);
-        }
         ctx.fillText(chars[i], x, y);
     }
-    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
 
     ctx.restore();
@@ -261,7 +251,6 @@ export const matrixRainEffect = {
         { label: 'Inject',   keys: ['matrixRainInjectEnabled', 'matrixRainInjectPercent', 'matrixRainInjectSeed', 'matrixRainSpaceInject'] },
         { label: 'Layout',   keys: ['matrixRainDirection', 'matrixRainOrder', 'matrixRainSize', 'matrixRainCharSpacing', 'matrixRainLineSpacing', 'matrixRainWordSpacing', 'matrixRainFont'] },
         { label: 'Color',    keys: ['matrixRainColor', 'matrixRainOpacity'] },
-        { label: 'Glow',     keys: ['matrixRainGlowEnabled', 'matrixRainGlowRadius', 'matrixRainGlowIntensity'] },
     ],
 
     params: {
@@ -275,9 +264,9 @@ export const matrixRainEffect = {
         matrixRainInjectSeed:    { default: 1 },
         matrixRainSpaceInject:   { default: 0, min: 0, max: 1000 },
 
-        matrixRainDirection:     { default: 'Rows' },
+        matrixRainDirection:     { default: 'rows' },
         matrixRainOrder:         { default: 'forward' },
-        matrixRainSize:          { default: 24, min: 4, max: 200 },
+        matrixRainSize:          { default: 160, min: 4, max: 800 },
         matrixRainCharSpacing:   { default: 0, min: -20, max: 100 },
         matrixRainLineSpacing:   { default: 0, min: -20, max: 100 },
         matrixRainWordSpacing:   { default: 0, min: 0, max: 20 },
@@ -288,10 +277,6 @@ export const matrixRainEffect = {
 
         matrixRainColor:         { default: 'green' },
         matrixRainOpacity:       { default: 100, min: 0, max: 100 },
-
-        matrixRainGlowEnabled:   { default: true },
-        matrixRainGlowRadius:    { default: 10, min: 1, max: 60 },
-        matrixRainGlowIntensity: { default: 100, min: 0, max: 200 },
     },
 
     enabled(p) { return p.matrixRainEnabled; },
