@@ -18,6 +18,8 @@ import crtStaticEffect      from './crtStatic.js';
 import transformEffect      from './transform.js';
 import cropEffect           from './crop.js';
 import glowEffect           from './glow.js';
+import viewportEffect       from './viewport.js';
+import { matrixRainEffect } from './matrixRain.js';
 
 /**
  * Master ordered list of all effects.
@@ -50,12 +52,14 @@ export const EFFECTS = [
     invertEffect,
     vhsEffect,
     vhsTimestampEffect,
+    matrixRainEffect,
     wavesEffect,
     digitalSmearEffect,
     corruptedEffect,
     crtCurvatureEffect,
     crtScanlinesEffect,
     crtStaticEffect,
+    viewportEffect,
 ];
 
 // ---------------------------------------------------------------------------
@@ -105,22 +109,24 @@ export const EFFECT_CATALOG = [
     { name: 'blur',           label: 'Blur',                 description: 'Gaussian blur shaped like a vignette — sharp center, soft edges' },
     { name: 'chanSat',        label: 'Channel Saturation',   description: 'Target R, G, or B dominant pixels and boost or drain their saturation' },
     { name: 'chroma',         label: 'Chromatic Aberration', description: 'RGB channel separation glitch' },
+    { name: 'corrupted',     label: 'Corrupted',            description: 'Fractal square corruption spreading from seeded points' },
     { name: 'crop',           label: 'Crop',                 description: 'Crop the image' },
     { name: 'crtCurvature',   label: 'CRT Curvature',        description: 'Barrel lens distortion' },
     { name: 'crtScanlines',   label: 'CRT Scanlines',        description: 'Horizontal scanline darkening' },
     { name: 'crtStatic',      label: 'CRT Static',           description: 'Random noise over the image' },
+    { name: 'digital-smear', label: 'Digital Smear',        description: 'Wet paint brush smear with wave-modulated displacement' },
     { name: 'digitize',       label: 'Digitize',             description: 'Pixelation, color quantization, dithering, and noise' },
     { name: 'doubleExposure', label: 'Double Exposure',      description: 'Blend two images together' },
     { name: 'grain',          label: 'Film Grain',           description: 'Analog noise and grain texture' },
     { name: 'glow',           label: 'Glow',                 description: 'Bloom halo around bright areas' },
     { name: 'invert',         label: 'Invert',               description: 'Color inversion with threshold' },
+    { name: 'matrixRain',   label: 'Matrix Rain',          description: 'Tile text characters across the image in configurable grid patterns' },
     { name: 'transform',      label: 'Rotate',               description: 'Flip and rotate' },
+    { name: 'viewport',      label: 'Viewport',             description: 'Reveal a shaped window that cuts through selected effects' },
+    { name: 'vignette',       label: 'Vignette',             description: 'Edge darkening or brightening' },
     { name: 'vhs',            label: 'VHS Effect',           description: 'Tracking, color bleed, and VHS noise' },
     { name: 'vhsTimestamp',   label: 'VHS Timestamp',        description: 'Retro timestamp text overlay' },
-    { name: 'vignette',       label: 'Vignette',             description: 'Edge darkening or brightening' },
     { name: 'waves',          label: 'Waves',                description: 'Wave distortion per color channel' },
-    { name: 'digital-smear', label: 'Digital Smear',        description: 'Wet paint brush smear with wave-modulated displacement' },
-    { name: 'corrupted',     label: 'Corrupted',            description: 'Fractal square corruption spreading from seeded points' },
 ];
 
 /**

@@ -5,9 +5,9 @@ export default {
     paramKeys: ['crtCurvature', 'crtCurvatureRadius', 'crtCurvatureIntensity', 'crtCurvatureX', 'crtCurvatureY'],
     params: {
         crtCurvatureEnabled:   { default: false },
-        crtCurvature:          { default: 0,   min: 0,   max: 100 },
-        crtCurvatureRadius:    { default: 100, min: 0,   max: 100 },
-        crtCurvatureIntensity: { default: 100, min: 0,   max: 100 },
+        crtCurvature:          { default: 70,   min: 0,   max: 100 },
+        crtCurvatureRadius:    { default: 130, min: 0,   max: 200 },
+        crtCurvatureIntensity: { default: 50, min: 0,   max: 100 },
         crtCurvatureX:         { default: 0,   min: -50, max: 50  },
         crtCurvatureY:         { default: 0,   min: -50, max: 50  },
     },

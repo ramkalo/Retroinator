@@ -33,6 +33,7 @@ export default {
         cropY:          { default: 0, min: -50, max: 50 },
         cropScale:      { default: 100, min: 10, max: 100 },
     },
+    handleParams: ['cropX', 'cropY', 'cropScale'],
     enabled: (p) => p.cropEnabled && p.cropScale > 0,
     getOutputDimensions: (p, srcW, srcH) => {
         const { cropW, cropH } = computeCropRegion(p, srcW, srcH);

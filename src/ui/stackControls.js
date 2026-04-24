@@ -63,6 +63,8 @@ const PARAM_LABELS = {
     crtCurvatureIntensity: 'Intensity', crtCurvatureX: 'Center X', crtCurvatureY: 'Center Y',
     crtScanlineEnabled: 'Enable', crtScanline: 'Scanline', crtScanSpacing: 'Scan Spacing',
     crtStaticEnabled: 'Enable', crtStatic: 'Static', crtStaticType: 'Static Type',
+    // viewport
+    vpEnabled: 'Enable', vpShape: 'Shape', vpPost: 'Post Mode', vpInvert: 'Invert', vpSides: 'Sides',
     // doubleExposure
     doubleExposureEnabled: 'Enable', doubleExposureChannelMode: 'Channels',
     doubleExposureBlendMode: 'Blend Mode', doubleExposureIntensity: 'Threshold',
@@ -70,10 +72,22 @@ const PARAM_LABELS = {
     // chanSat
     chanSatEnabled: 'Enable', chanSatRed: 'Red', chanSatGreen: 'Green', chanSatBlue: 'Blue',
     chanSatThreshold: 'Min Saturation', chanSatAmount: 'Saturation', chanSatBlend: 'Blend',
+    // matrixRain
+    matrixRainEnabled: 'Enable', matrixRainText: 'Text', matrixRainMode: 'Mode',
+    matrixRainInjectEnabled: 'Enable Inject', matrixRainInjectPercent: 'Inject %', matrixRainInjectSeed: 'Inject Seed',
+    matrixRainSpaceInject: 'Inject Spaces',
+    matrixRainDirection: 'Direction', matrixRainOrder: 'Order',
+    matrixRainSize: 'Size', matrixRainCharSpacing: 'Char Spacing',
+    matrixRainLineSpacing: 'Line Spacing', matrixRainWordSpacing: 'Word Spacing',
+    matrixRainFont: 'Font',
+    matrixRainX: 'X', matrixRainY: 'Y',
+    matrixRainColor: 'Color', matrixRainOpacity: 'Opacity',
+    matrixRainGlowEnabled: 'Enable Glow', matrixRainGlowRadius: 'Radius', matrixRainGlowIntensity: 'Intensity',
 };
 
 // Select options for enum params
 const PARAM_OPTIONS = {
+    vpShape: [['rectangle', 'Rectangle'], ['circle', 'Circle'], ['triangle', 'Triangle'], ['polygon', 'Polygon']],
     cropAspect: [['original', 'Original'], ['1:1', '1:1 (Square)'], ['4:3', '4:3'], ['16:9', '16:9'], ['3:2', '3:2']],
     blurMode:     [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
     vignetteMode: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
@@ -103,6 +117,35 @@ const PARAM_OPTIONS = {
         ['center', 'Image Center'], ['random-img', 'Random from Image'],
     ],
     corruptedColorMode: [['per-chunk', 'Per Chunk'], ['per-zone', 'Per Zone'], ['glitched', 'Glitched']],
+    matrixRainMode: [
+        ['wordOrder',         'Word Order'],
+        ['spaceShuffle',      'Space Shuffle'],
+        ['wordShuffle',       'Word Shuffle'],
+        ['randomFromContent', 'Random from Content'],
+        ['randomAlpha',       'Random Alpha'],
+        ['randomNumeric',     'Random Numeric'],
+        ['randomAlphanumeric','Random Alphanumeric'],
+        ['randomExtended',    'Random Extended (96)'],
+    ],
+    matrixRainDirection: [['columns', 'Columns'], ['rows', 'Rows']],
+    matrixRainOrder:     [['forward', 'Forward'], ['reverse', 'Reverse']],
+    matrixRainFont: [
+        ['monospace',                   'Monospace'],
+        ["'Courier New', monospace",    'Courier New'],
+        ["'JetBrains Mono', monospace", 'JetBrains Mono'],
+        ["'Arial', sans-serif",         'Arial'],
+        ["'Georgia', serif",            'Georgia'],
+        ["'Times New Roman', serif",    'Times New Roman'],
+    ],
+    matrixRainColor: [
+        ['red', 'Red'], ['green', 'Green'], ['blue', 'Blue'],
+        ['cyan', 'Cyan'], ['yellow', 'Yellow'], ['magenta', 'Magenta'],
+        ['black', 'Black'], ['white', 'White'],
+        ['greyNoise', 'Greyscale Noise'],
+        ['colorNoise', 'Color Noise'],
+        ['imagePaletteNoise',   'Image Palette Inside'],
+        ['imagePaletteRandom',  'Image Palette Noise'],
+    ],
     blackBoxFill: [
         ['black', 'Black'],
         ['white', 'White'],
@@ -265,8 +308,30 @@ function buildControl(inst, key, schema, onRebuild) {
         return group;
     }
 
+    // Textarea for multi-line text entry
+    if (key === 'matrixRainText') {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+        const labelEl = document.createElement('div');
+        labelEl.className = 'control-section-header';
+        labelEl.style.cssText = 'font-size:0.75rem;margin-bottom:2px;';
+        labelEl.textContent = label;
+        const textarea = document.createElement('textarea');
+        textarea.value = currentVal;
+        textarea.rows = 4;
+        textarea.dataset.instParam = key;
+        textarea.style.cssText = 'width:100%;resize:vertical;box-sizing:border-box;font-size:0.8rem;';
+        textarea.addEventListener('input', () => {
+            setInstanceParam(inst.id, key, textarea.value);
+        });
+        group.appendChild(labelEl);
+        group.appendChild(textarea);
+        return group;
+    }
+
     // Seed → Randomize button
-    if (key === 'vhsTrackingSeed' || key === 'blackBoxStaticSeed' || key === 'corruptedSeed') {
+    if (key === 'vhsTrackingSeed' || key === 'blackBoxStaticSeed' || key === 'corruptedSeed'
+        || key === 'matrixRainInjectSeed') {
         const group = document.createElement('div');
         group.className = 'control-group';
         const row = document.createElement('div');

@@ -15,3 +15,9 @@ export function processImage() {
         processWebGLStack(getStack());
     }, 150);
 }
+
+export function processImageImmediate() {
+    clearTimeout(debounceTimer);
+    if (!originalImage) return;
+    processWebGLStack(getStack());
+}

@@ -6,6 +6,7 @@ import {
     setOriginalTexture, setFboPool,
 } from './glstate.js';
 import { getEffect } from '../effects/registry.js';
+import { isCropPreviewActive } from '../state/cropPreview.js';
 
 // Coordinate system: UNPACK_FLIP_Y_WEBGL=true on image uploads, no Y flip in vertex shader.
 // vUV = (0,0) at screen/image bottom-left, (1,1) at screen/image top-right.
@@ -177,7 +178,7 @@ function runPass(fragSrc, srcTex, dstFbo, effect, params) {
 
     if (effect) {
         autoBindUniforms(prog, effect, params);
-        if (effect.bindUniforms) effect.bindUniforms(gl, prog, params, dstW, dstH, srcTex);
+        if (effect.bindUniforms) effect.bindUniforms(gl, prog, params, dstW, dstH, srcTex, _origTex);
     }
     drawQuad();
     return true;
@@ -187,6 +188,18 @@ function runPass(fragSrc, srcTex, dstFbo, effect, params) {
 let _origTex = null;
 let _lastOriginalImage = null;
 
+// --- Viewport composite FBOs ---
+let _vpPreFBO  = null;
+let _vpFullFBO = null;
+let _vpPostFBO = null;
+
+function _reallocVpFBOs(w, h) {
+    if (_vpPreFBO?.width === w && _vpPreFBO?.height === h) return;
+    destroyFBO(_vpPreFBO);  _vpPreFBO  = createFBO(w, h);
+    destroyFBO(_vpFullFBO); _vpFullFBO = createFBO(w, h);
+    destroyFBO(_vpPostFBO); _vpPostFBO = createFBO(w, h);
+}
+
 // Show the unprocessed original image (used by long-press compare in touch.js).
 export function blitOriginalToScreen() {
     if (!_origTex) return;
@@ -195,16 +208,21 @@ export function blitOriginalToScreen() {
 
 // --- Shared effect loop ---
 
-function _runEffects(stack) {
-    let srcTex = _origTex;
+// Run a slice of the stack, starting from startTex. Returns the resulting srcTex
+// (pointing into fboPool). Does NOT blit to screen. Skips 'viewport' pass effects.
+function _runLinear(stack, startTex) {
+    let srcTex = startTex;
     let pingIdx = 0;
 
     for (let i = 0; i < stack.length; i++) {
         const instance = stack[i];
         const effect = getEffect(instance.effectName);
         if (!effect || !effect.enabled(instance.params)) continue;
+        if (effect.pass === 'viewport') continue;
 
         if (effect.pass === 'transform') {
+            // In crop-preview mode keep the canvas at full image size
+            if (instance.effectName === 'crop' && isCropPreviewActive()) continue;
             if (!effect.glsl) continue;
 
             const curW = fboPool[0]?.width  || canvas.width;
@@ -247,6 +265,14 @@ function _runEffects(stack) {
             if (!overlayCanvas || !overlayCtx || !effect.canvas2d) continue;
 
             runPass(PASSTHROUGH_FRAG, srcTex, null, null, null);
+            // Keep overlayCanvas in sync with the current canvas size — transform passes
+            // (e.g. crop) may have resized the canvas since processWebGLStack set it to
+            // the full image size. If sizes differ, the blit into the pool FBO maps the
+            // entire overlayCanvas texture over a smaller target, producing a stretched image.
+            if (overlayCanvas.width !== canvas.width || overlayCanvas.height !== canvas.height) {
+                overlayCanvas.width  = canvas.width;
+                overlayCanvas.height = canvas.height;
+            }
             overlayCtx.clearRect(0, 0, canvas.width, canvas.height);
             overlayCtx.drawImage(canvas, 0, 0);
             effect.canvas2d(overlayCtx, instance.params);
@@ -320,7 +346,72 @@ function _runEffects(stack) {
         pingIdx++;
     }
 
-    runPass(PASSTHROUGH_FRAG, srcTex, null, null, null);
+    return srcTex;
+}
+
+function _runViewportComposite(vpInst, fullTex, windowTex) {
+    const effect = getEffect('viewport');
+    const params = vpInst.params;
+    const w = canvas.width, h = canvas.height;
+    const prog = getProgram(effect.glsl);
+    if (!prog) return;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(prog);
+    bindTex0(prog, fullTex);       // uTex = outside (full result)
+    setStdUniforms(prog, w, h);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, windowTex);
+    if (prog._locs['uTexWindow'] != null) gl.uniform1i(prog._locs['uTexWindow'], 1);
+    gl.activeTexture(gl.TEXTURE0);
+
+    autoBindUniforms(prog, effect, params);
+    if (effect.bindUniforms) effect.bindUniforms(gl, prog, params, w, h);
+    drawQuad();
+}
+
+function _runEffects(stack) {
+    const vpIdx = stack.findIndex(inst => {
+        const effect = getEffect(inst.effectName);
+        return effect?.pass === 'viewport' && inst.params.vpEnabled;
+    });
+
+    if (vpIdx === -1) {
+        const srcTex = _runLinear(stack, _origTex);
+        runPass(PASSTHROUGH_FRAG, srcTex, null, null, null);
+        if (overlayCanvas && overlayCtx) overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        return;
+    }
+
+    const preStack  = stack.slice(0, vpIdx);
+    const postStack = stack.slice(vpIdx + 1);
+    const vpInst    = stack[vpIdx];
+
+    // Phase 1: pre-effects → capture to _vpPreFBO
+    const preTex = _runLinear(preStack, _origTex);
+    _reallocVpFBOs(canvas.width, canvas.height);
+    runPass(PASSTHROUGH_FRAG, preTex, _vpPreFBO, null, null);
+
+    // Phase 2: post-effects on pre-state → _vpFullFBO (the full pipeline result)
+    const fullTex = _runLinear(postStack, _vpPreFBO.tex);
+    runPass(PASSTHROUGH_FRAG, fullTex, _vpFullFBO, null, null);
+
+    // Phase 3: select window content
+    let windowTex;
+    if (vpInst.params.vpPost) {
+        // Post mode: window shows original with only post-effects applied
+        const postTex = _runLinear(postStack, _origTex);
+        runPass(PASSTHROUGH_FRAG, postTex, _vpPostFBO, null, null);
+        windowTex = _vpPostFBO.tex;
+    } else {
+        // Pre mode: window shows image just before the viewport in the stack
+        windowTex = _vpPreFBO.tex;
+    }
+
+    // Phase 4: composite viewport shape → screen
+    _runViewportComposite(vpInst, _vpFullFBO.tex, windowTex);
     if (overlayCanvas && overlayCtx) overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 }
 
