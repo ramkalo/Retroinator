@@ -2,17 +2,19 @@ export default {
     name: 'vignette',
     label: 'Vignette',
     pass: 'pre-crt',
-    paramKeys: ['vignetteMode', 'vignetteMajor', 'vignetteMinor', 'vignetteAngle', 'vignetteCenterX', 'vignetteCenterY', 'vignetteEdge', 'vignetteCenter'],
+    paramKeys: ['vignetteMode', 'vignetteMajor', 'vignetteMinor', 'vignetteAngle', 'vignetteCenterX', 'vignetteCenterY', 'vignetteEdge', 'vignetteCenter', 'vignetteTransition'],
+    handleParams: ['vignetteCenterX', 'vignetteCenterY', 'vignetteMajor', 'vignetteMinor', 'vignetteAngle'],
     params: {
         vignetteEnabled: { default: false },
         vignetteMode:    { default: 'ellipse' },
-        vignetteMajor:   { default: 100, min: 0, max: 150 },
-        vignetteMinor:   { default: 100, min: 0, max: 150 },
+        vignetteMajor:   { default: 40, min: 0, max: 150 },
+        vignetteMinor:   { default: 40, min: 0, max: 150 },
         vignetteAngle:   { default: 0,   min: 0, max: 180 },
         vignetteCenterX: { default: 0,   min: -50, max: 50  },
         vignetteCenterY: { default: 0,   min: -50, max: 50  },
         vignetteEdge:    { default: 0,   min: -100, max: 100 },
-        vignetteCenter:  { default: 0,   min: -100, max: 100 },
+        vignetteCenter:     { default: 0,   min: -100, max: 100 },
+        vignetteTransition: { default: 2,   min: 0.5,  max: 5, step: 0.1 },
     },
     enabled: (p) => p.vignetteEnabled,
     bindUniforms: (gl, prog, params) => {
@@ -27,6 +29,7 @@ uniform float vignetteCenterX;
 uniform float vignetteCenterY;
 uniform float vignetteEdge;
 uniform float vignetteCenter;
+uniform float vignetteTransition;
 uniform int   vignetteMode;
 
 void main() {
@@ -44,7 +47,7 @@ void main() {
     float dist = (vignetteMode == 1)
         ? max(abs(rx)/a, abs(ry)/b)
         : sqrt((rx/a)*(rx/a) + (ry/b)*(ry/b));
-    float falloff      = pow(min(dist, 1.0), 2.0);
+    float falloff      = pow(clamp(dist - 1.0, 0.0, 1.0), max(vignetteTransition, 0.01));
     float edgeFactor   = max(0.0, 1.0 + falloff * (vignetteEdge   / 100.0));
     float centerFactor = max(0.0, 1.0 + (1.0 - falloff) * (vignetteCenter / 100.0));
     fragColor = vec4(clamp(c.rgb * edgeFactor * centerFactor, 0.0, 1.0), c.a);

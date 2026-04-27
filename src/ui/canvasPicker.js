@@ -8,7 +8,7 @@ const uiOverlay = document.getElementById('uiOverlay');
 const uiCtx     = uiOverlay.getContext('2d');
 
 // Active overlay state — only one active at a time
-let _mode       = null;   // 'fade' | 'blur' | 'blackBox' | 'crop' | 'viewport' | 'lineDrag' | 'chroma' | null
+let _mode       = null;   // 'fade' | 'blur' | 'blackBox' | 'crop' | 'viewport' | 'lineDrag' | 'chroma' | 'vignette' | null
 let _instId     = null;
 let _dragging   = false;
 let _xKey       = null;
@@ -35,6 +35,7 @@ onStackChange((key) => {
     if (_mode === 'matrixRain') drawMatrixRain(inst.params);
     if (_mode === 'lineDrag')   drawLineDrag(inst.params);
     if (_mode === 'chroma')     drawChroma(inst.params);
+    if (_mode === 'vignette')   drawVignette(inst.params);
     if (_mode === 'viewport') {
         const p = inst.params;
         const shape = p.vpShape;
@@ -127,6 +128,15 @@ export function showChromaOverlay(inst) {
 
 export function hideChromaOverlay() {
     if (_mode === 'chroma') _hideActive();
+}
+
+export function showVignetteOverlay(inst) {
+    _activate('vignette', inst, 'vignetteCenterX', 'vignetteCenterY');
+    drawVignette(inst.params);
+}
+
+export function hideVignetteOverlay() {
+    if (_mode === 'vignette') _hideActive();
 }
 
 // ── Activation / deactivation ─────────────────────────────────────────────────
@@ -469,6 +479,78 @@ function drawBlur(p) {
     uiCtx.restore();
 
     drawHandle(cx, cy);
+}
+
+function drawVignette(p) {
+    syncSize();
+    const w = uiOverlay.width, h = uiOverlay.height;
+    uiCtx.clearRect(0, 0, w, h);
+
+    const cx    = (0.5 + p.vignetteCenterX / 100) * w;
+    const cy    = (0.5 - p.vignetteCenterY / 100) * h;
+    const a     = Math.max(1, (p.vignetteMajor / 100) * 0.7071 * w);
+    const b     = Math.max(1, (p.vignetteMinor / 100) * 0.7071 * h);
+    const angle = p.vignetteAngle * Math.PI / 180;
+    const cosA  = Math.cos(angle), sinA = Math.sin(angle);
+    const rotPt = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
+
+    uiCtx.save();
+    uiCtx.translate(cx, cy);
+    uiCtx.rotate(angle);
+    uiCtx.beginPath();
+    if (p.vignetteMode === 'rectangle') {
+        uiCtx.rect(-a, -b, 2 * a, 2 * b);
+    } else {
+        uiCtx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+    }
+    uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
+    uiCtx.lineWidth   = 1.5;
+    uiCtx.setLineDash([5, 5]);
+    uiCtx.stroke();
+    uiCtx.setLineDash([]);
+    uiCtx.restore();
+
+    const edgeW     = rotPt(a, 0);
+    const edgeH     = rotPt(0, -b);
+    const rotHandle = rotPt(0, -(b + 22));
+
+    uiCtx.beginPath();
+    uiCtx.moveTo(edgeH[0], edgeH[1]);
+    uiCtx.lineTo(rotHandle[0], rotHandle[1]);
+    uiCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+    uiCtx.lineWidth   = 1;
+    uiCtx.stroke();
+
+    drawCornerHandle(edgeW[0], edgeW[1]);
+    drawCornerHandle(edgeH[0], edgeH[1]);
+    drawRotHandle(rotHandle[0], rotHandle[1]);
+    drawHandle(cx, cy);
+}
+
+function hitTestVignette(e) {
+    const inst = getStack().find(i => i.id === _instId);
+    if (!inst) return null;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const W = uiOverlay.width, H = uiOverlay.height;
+    const p = inst.params;
+    const cx    = (0.5 + p.vignetteCenterX / 100) * W;
+    const cy    = (0.5 - p.vignetteCenterY / 100) * H;
+    const a     = Math.max(1, (p.vignetteMajor / 100) * 0.7071 * W);
+    const b     = Math.max(1, (p.vignetteMinor / 100) * 0.7071 * H);
+    const angle = p.vignetteAngle * Math.PI / 180;
+    const cosA  = Math.cos(angle), sinA = Math.sin(angle);
+    const rotPt = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
+    const edgeW     = rotPt(a, 0);
+    const edgeH     = rotPt(0, -b);
+    const rotHandle = rotPt(0, -(b + 22));
+
+    if (Math.hypot(mx - cx,           my - cy)           <= HIT_RADIUS) return 'center';
+    if (Math.hypot(mx - rotHandle[0], my - rotHandle[1]) <= HIT_RADIUS) return 'rot';
+    if (Math.hypot(mx - edgeW[0],     my - edgeW[1])     <= HIT_RADIUS) return 'edgeW';
+    if (Math.hypot(mx - edgeH[0],     my - edgeH[1])     <= HIT_RADIUS) return 'edgeH';
+    return null;
 }
 
 // BlackBox grab selector — same geometry as main box but using grab params
@@ -1016,6 +1098,12 @@ function onHover(e) {
             : h === 'rot' ? 'crosshair'
             : h === 'edgeW' ? 'ew-resize'
             : h === 'edgeH' ? 'ns-resize' : 'default';
+    } else if (_mode === 'vignette') {
+        const h = hitTestVignette(e);
+        uiOverlay.style.cursor = h === 'center' ? 'grab'
+            : h === 'rot'   ? 'crosshair'
+            : h === 'edgeW' ? 'ew-resize'
+            : h === 'edgeH' ? 'ns-resize' : 'default';
     } else {
         uiOverlay.style.cursor = hitTest(e) ? 'grab' : 'default';
     }
@@ -1074,6 +1162,14 @@ function onDown(e) {
         uiOverlay.style.cursor = (h === 'center' || h === 'fadeCenter') ? 'grabbing'
             : h === 'rot' ? 'crosshair'
             : h === 'edgeW' ? 'ew-resize' : 'ns-resize';
+    } else if (_mode === 'vignette') {
+        const h = hitTestVignette(e);
+        if (!h) return;
+        _handle   = h;
+        _dragging = true;
+        uiOverlay.setPointerCapture(e.pointerId);
+        uiOverlay.style.cursor = h === 'center' ? 'grabbing'
+            : h === 'rot' ? 'crosshair' : 'nwse-resize';
     } else {
         if (!hitTest(e)) return;
         _dragging = true;
@@ -1259,6 +1355,29 @@ function onDrag(e) {
             if (deg < -180) deg += 360;
             setInstanceParam(_instId, _angleKey, Math.round(deg));
         }
+    } else if (_mode === 'vignette') {
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const W  = uiOverlay.width, H = uiOverlay.height;
+        const p  = inst.params;
+        const cx = (0.5 + p.vignetteCenterX / 100) * W;
+        const cy = (0.5 - p.vignetteCenterY / 100) * H;
+        if (_handle === 'center') {
+            setInstanceParam(_instId, 'vignetteCenterX', Math.round(Math.max(-50, Math.min(50,  (mx / W - 0.5) * 100))));
+            setInstanceParam(_instId, 'vignetteCenterY', Math.round(Math.max(-50, Math.min(50, -(my / H - 0.5) * 100))));
+        } else if (_handle === 'edgeW') {
+            const ang  = p.vignetteAngle * Math.PI / 180;
+            const proj = (mx - cx) * Math.cos(ang) + (my - cy) * Math.sin(ang);
+            setInstanceParam(_instId, 'vignetteMajor', Math.round(Math.max(1, Math.min(150, Math.abs(proj) / (0.7071 * W) * 100))));
+        } else if (_handle === 'edgeH') {
+            const ang  = p.vignetteAngle * Math.PI / 180;
+            const proj = -(mx - cx) * Math.sin(ang) + (my - cy) * Math.cos(ang);
+            setInstanceParam(_instId, 'vignetteMinor', Math.round(Math.max(1, Math.min(150, Math.abs(proj) / (0.7071 * H) * 100))));
+        } else if (_handle === 'rot') {
+            let deg = Math.atan2(my - cy, mx - cx) * 180 / Math.PI + 90;
+            deg = ((deg % 180) + 180) % 180;
+            setInstanceParam(_instId, 'vignetteAngle', Math.round(deg));
+        }
     } else {
         const x = Math.round(Math.max(-50, Math.min(50, ((e.clientX - rect.left) / rect.width  - 0.5) * 100)));
         const y = Math.round(Math.max(-50, Math.min(50, -((e.clientY - rect.top)  / rect.height - 0.5) * 100)));
@@ -1286,4 +1405,5 @@ function onUp() {
     if (_mode === 'viewport')   drawViewport(inst.params);
     if (_mode === 'lineDrag')   drawLineDrag(inst.params);
     if (_mode === 'chroma')     drawChroma(inst.params);
+    if (_mode === 'vignette')   drawVignette(inst.params);
 }

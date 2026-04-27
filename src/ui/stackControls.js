@@ -36,6 +36,7 @@ const PARAM_LABELS = {
     vignetteEnabled: 'Enable', vignetteMode: 'Mode', vignetteMajor: 'Major Axis',
     vignetteMinor: 'Minor Axis', vignetteAngle: 'Angle', vignetteEdge: 'Edge Brightness',
     vignetteCenter: 'Center Brightness', vignetteCenterX: 'Center X', vignetteCenterY: 'Center Y',
+    vignetteTransition: 'Transition',
     // chroma
     chromaEnabled: 'Enable', chromaMode: 'Mode', chromaScale: 'Scale',
     chromaRedX: 'Red X', chromaRedY: 'Red Y', chromaGreenX: 'Green X', chromaGreenY: 'Green Y',
