@@ -44,13 +44,14 @@ const PARAM_LABELS = {
     chromaThreshold: 'Threshold', chromaThresholdReverse: 'Reverse Threshold',
     chromaFade: 'Fade', chromaFadeRadius: 'Fade Radius', chromaFadeInvert: 'Invert Fade', chromaFadeX: 'Fade X', chromaFadeY: 'Fade Y',
     // invert
-    invertEnabled: 'Enable', invertMode: 'Mode', invertTarget: 'Target',
-    invertIntensity: 'Threshold', invertReverse: 'Reverse Threshold',
+    invertEnabled: 'Enable', invertColorA: 'Color A', invertColorB: 'Color B',
+    invertTarget: 'Target', invertIntensity: 'Threshold', invertReverse: 'Reverse Threshold',
     // digitize
     digitizeEnabled: 'Enable', pixelSize: 'Pixel Size', pixelColors: '# Colors',
     digitizeDither: 'Dithering', digitizeNoise: 'Noise',
     // vhs
     vhsEnabled: 'Enable', vhsTracking: 'Line Glitch', vhsTrackingThickness: 'Thickness', vhsTrackingAmount: 'Amount', vhsTrackingSeed: 'Spacing', vhsTrackingColor: 'Line Color',
+    vhsTrackingAngle: 'Line Angle', vhsTrackingWobble: 'Angle Wobble', vhsTrackingWobbleSeed: 'Wobble Seed', vhsTrackingWobbleBtn: 'Wobble Lines',
     // vhsTimestamp
     vhsTimestampEnabled: 'Enable', vhsTimestamp: 'Text', vhsTimestampSize: 'Size',
     vhsTimestampX: 'X', vhsTimestampY: 'Y', vhsTimestampColor: 'Color',
@@ -60,6 +61,14 @@ const PARAM_LABELS = {
     wavesFade: 'Fade', wavesFadeW: 'Width', wavesFadeH: 'Height',
     wavesFadeSlope: 'Transition Slope', wavesFadeInvert: 'Invert Fade',
     wavesFadeX: 'Center X', wavesFadeY: 'Center Y',
+    // lineDrag
+    lineDragEnabled: 'Enable', lineDragX: 'X', lineDragY: 'Y', lineDragAngle: 'Angle', lineDragDir: 'Direction',
+    lineDragTarget: 'Target', lineDragThreshold: 'Threshold',
+    lineDragThresholdReverse: 'Reverse Threshold', lineDragThresholdOnDest: 'On Destination',
+    lineDragFadeEnabled: 'Enable Fade', lineDragFadeShape: 'Shape',
+    lineDragFade: 'Fade', lineDragFadeW: 'Width', lineDragFadeH: 'Height',
+    lineDragFadeSlope: 'Transition Slope', lineDragFadeInvert: 'Invert Fade',
+    lineDragFadeX: 'Center X', lineDragFadeY: 'Center Y',
     // digitalSmear
     smearEnabled: 'Enable', smearWidth: 'Width', smearDirection: 'Direction', smearShift: 'Shift',
     // corrupted
@@ -99,7 +108,26 @@ const PARAM_OPTIONS = {
     cropAspect: [['original', 'Original'], ['1:1', '1:1 (Square)'], ['4:3', '4:3'], ['16:9', '16:9'], ['3:2', '3:2']],
     blurMode:     [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
     vignetteMode: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-    invertMode: [['all', 'All Colors'], ['rc', 'Red ↔ Cyan'], ['gm', 'Green ↔ Magenta'], ['by', 'Blue ↔ Yellow'], ['bw', 'Black vs White']],
+    invertColorA: [
+        ['bk', 'Black'],
+        ['r',  'Red'],
+        ['g',  'Green'],
+        ['b',  'Blue'],
+        ['c',  'Cyan'],
+        ['y',  'Yellow'],
+        ['m',  'Magenta'],
+        ['w',  'White'],
+    ],
+    invertColorB: [
+        ['w',  'White'],
+        ['r',  'Red'],
+        ['g',  'Green'],
+        ['b',  'Blue'],
+        ['c',  'Cyan'],
+        ['y',  'Yellow'],
+        ['m',  'Magenta'],
+        ['bk', 'Black'],
+    ],
     invertTarget: [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']],
     vhsTrackingColor: [['shift', 'Shift (default)'], ['white', 'White'], ['black', 'Black'], ['noise', 'Noise'], ['color', 'Color Noise']],
     vhsTimestampColor: [['white', 'White'], ['black', 'Black']],
@@ -174,6 +202,9 @@ const PARAM_OPTIONS = {
     blackBoxGrabMode: [['skew', 'Skew'], ['wrap', 'Wrap']],
     basicFadeShape:   [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
     wavesFadeShape:   [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
+    lineDragDir:       [['down', 'Down'], ['up', 'Up'], ['right', 'Right'], ['left', 'Left']],
+    lineDragTarget:    [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']],
+    lineDragFadeShape: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
 };
 
 // Build all parameter controls for one effect instance into a container div.
@@ -246,6 +277,24 @@ export function buildEffectBody(inst, onRebuild) {
 function buildControl(inst, key, schema, onRebuild) {
     const label = PARAM_LABELS[key] || key;
     const currentVal = inst.params[key];
+
+    // Action button — schema.button names the param to randomize when clicked
+    if (schema.button) {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = label;
+        btn.addEventListener('click', () => {
+            saveState();
+            setInstanceParam(inst.id, schema.button, Math.floor(Math.random() * 999) + 1);
+        });
+        row.appendChild(btn);
+        group.appendChild(row);
+        return group;
+    }
 
     // Rotate checkboxes (radio-like - only one can be checked)
     if (key === 'rotate90') {

@@ -11,6 +11,7 @@ import invertEffect          from './invert.js';
 import { vhsEffect, vhsTimestampEffect } from './vhs.js';
 import wavesEffect          from './waves.js';
 import digitalSmearEffect   from './digitalSmear.js';
+import lineDragEffect       from './lineDrag.js';
 import corruptedEffect      from './corrupted.js';
 import crtCurvatureEffect   from './crtCurvature.js';
 import crtScanlinesEffect   from './crtScanlines.js';
@@ -55,6 +56,7 @@ export const EFFECTS = [
     matrixRainEffect,
     wavesEffect,
     digitalSmearEffect,
+    lineDragEffect,
     corruptedEffect,
     crtCurvatureEffect,
     crtScanlinesEffect,
@@ -115,6 +117,7 @@ export const EFFECT_CATALOG = [
     { name: 'crtScanlines',   label: 'CRT Scanlines',        description: 'Horizontal scanline darkening' },
     { name: 'crtStatic',      label: 'CRT Static',           description: 'Random noise over the image' },
     { name: 'digital-smear', label: 'Digital Smear',        description: 'Wet paint brush smear with wave-modulated displacement' },
+    { name: 'lineDrag',      label: 'Line Drag',            description: 'Smear pixel columns or rows from a control line across the image' },
     { name: 'digitize',       label: 'Digitize',             description: 'Pixelation, color quantization, dithering, and noise' },
     { name: 'doubleExposure', label: 'Double Exposure',      description: 'Blend two images together' },
     { name: 'grain',          label: 'Film Grain',           description: 'Analog noise and grain texture' },

@@ -2,7 +2,7 @@ import { EFFECT_CATALOG, getEffect } from '../effects/registry.js';
 import { getStack, addEffect, removeEffect, moveEffect, duplicateEffect, setInstanceParam } from '../state/effectStack.js';
 import { saveState } from '../state/undo.js';
 import { buildEffectBody } from './stackControls.js';
-import { showFadeOverlay, hideFadeOverlay, showBlurOverlay, hideBlurOverlay, showBlackBoxOverlay, hideBlackBoxOverlay, showCropOverlay, hideCropOverlay, showViewportOverlay, hideViewportOverlay, showMatrixRainOverlay, hideMatrixRainOverlay } from './canvasPicker.js';
+import { showFadeOverlay, hideFadeOverlay, showBlurOverlay, hideBlurOverlay, showBlackBoxOverlay, hideBlackBoxOverlay, showCropOverlay, hideCropOverlay, showViewportOverlay, hideViewportOverlay, showMatrixRainOverlay, hideMatrixRainOverlay, showLineDragOverlay, hideLineDragOverlay } from './canvasPicker.js';
 
 let _expandedId = null;
 
@@ -209,6 +209,7 @@ export function renderStackList() {
     if (newEffect !== 'crop')     hideCropOverlay();
     if (newEffect !== 'viewport')    hideViewportOverlay();
     if (newEffect !== 'matrixRain') hideMatrixRainOverlay();
+    if (newEffect !== 'lineDrag') hideLineDragOverlay();
 
     if      (newEffect === 'basic')    showFadeOverlay(expandedInst);
     else if (newEffect === 'waves')    showFadeOverlay(expandedInst, 'wavesFadeX', 'wavesFadeY', 'wavesFadeShape', 'wavesFadeW', 'wavesFadeH', 'wavesFadeAngle', 'wavesFadeEnabled');
@@ -217,6 +218,7 @@ export function renderStackList() {
     else if (newEffect === 'crop')     showCropOverlay(expandedInst);
     else if (newEffect === 'viewport')    showViewportOverlay(expandedInst);
     else if (newEffect === 'matrixRain') showMatrixRainOverlay(expandedInst);
+    else if (newEffect === 'lineDrag') showLineDragOverlay(expandedInst);
 }
 
 // --- Drag-and-drop ---

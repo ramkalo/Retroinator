@@ -2,28 +2,38 @@ export default {
     name: 'invert',
     label: 'Invert',
     pass: 'pre-crt',
-    paramKeys: ['invertMode', 'invertTarget', 'invertIntensity', 'invertReverse'],
+    paramKeys: ['invertColorA', 'invertColorB', 'invertTarget', 'invertIntensity', 'invertReverse'],
     params: {
         invertEnabled:   { default: false },
-        invertMode:      { default: 'all' },
+        invertColorA:    { default: 'bk' },
+        invertColorB:    { default: 'w' },
         invertTarget:    { default: 'lum' },
         invertIntensity: { default: 100, min: 0, max: 100 },
         invertReverse:   { default: false },
     },
     enabled: (p) => p.invertEnabled,
     bindUniforms: (gl, prog, params) => {
-        const modeMap   = { all: 0, rc: 1, gm: 2, by: 3, bw: 4 };
+        const colorVec = {
+            r: [1,0,0], g: [0,1,0], b: [0,0,1],
+            c: [0,1,1], y: [1,1,0], m: [1,0,1],
+            bk: [0,0,0], w: [1,1,1],
+        };
         const targetMap = { lum: 0, r: 1, g: 2, b: 3 };
-        const modeLoc   = prog._locs['invertMode'];
+        const aLoc      = prog._locs['invertColorA'];
+        const bLoc      = prog._locs['invertColorB'];
         const targetLoc = prog._locs['invertTarget'];
-        if (modeLoc   != null) gl.uniform1i(modeLoc,   modeMap[params.invertMode]     ?? 0);
+        const a = colorVec[params.invertColorA] ?? [0,0,0];
+        const b = colorVec[params.invertColorB] ?? [1,1,1];
+        if (aLoc      != null) gl.uniform3f(aLoc,      ...a);
+        if (bLoc      != null) gl.uniform3f(bLoc,      ...b);
         if (targetLoc != null) gl.uniform1i(targetLoc, targetMap[params.invertTarget] ?? 0);
     },
     glsl: `
 uniform float invertIntensity;
 uniform int   invertReverse;
-uniform int   invertMode;   // 0=all 1=rc 2=gm 3=by 4=bw
-uniform int   invertTarget; // 0=lum 1=r 2=g 3=b
+uniform vec3  invertColorA;  // dark pole
+uniform vec3  invertColorB;  // bright pole
+uniform int   invertTarget;  // 0=lum 1=r 2=g 3=b
 
 void main() {
     vec4 c = texture(uTex, vUV);
@@ -33,11 +43,10 @@ void main() {
     float targetVal = (invertTarget==1)?r : (invertTarget==2)?g : (invertTarget==3)?b : lum;
     bool inv = (invertReverse==1) ? (targetVal <= threshold) : (targetVal >= threshold);
     if (inv) {
-        if      (invertMode == 0) { r=255.0-r; g=255.0-g; b=255.0-b; }
-        else if (invertMode == 1) { r=255.0-r; }
-        else if (invertMode == 2) { g=255.0-g; }
-        else if (invertMode == 3) { b=255.0-b; }
-        else if (invertMode == 4) { float l=255.0-lum; r=l; g=l; b=l; }
+        vec3 mapped = mix(invertColorA, invertColorB, lum / 255.0);
+        r = mapped.r * 255.0;
+        g = mapped.g * 255.0;
+        b = mapped.b * 255.0;
     }
     fragColor = vec4(r/255.0, g/255.0, b/255.0, c.a);
 }

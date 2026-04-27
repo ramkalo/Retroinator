@@ -8,7 +8,7 @@ const uiOverlay = document.getElementById('uiOverlay');
 const uiCtx     = uiOverlay.getContext('2d');
 
 // Active overlay state — only one active at a time
-let _mode       = null;   // 'fade' | 'blur' | 'blackBox' | 'crop' | 'viewport' | null
+let _mode       = null;   // 'fade' | 'blur' | 'blackBox' | 'crop' | 'viewport' | 'lineDrag' | null
 let _instId     = null;
 let _dragging   = false;
 let _xKey       = null;
@@ -33,6 +33,7 @@ onStackChange((key) => {
     if (_mode === 'blackBox')   drawBlackBox(inst.params);
     if (_mode === 'crop')       drawCrop(inst.params);
     if (_mode === 'matrixRain') drawMatrixRain(inst.params);
+    if (_mode === 'lineDrag')   drawLineDrag(inst.params);
     if (_mode === 'viewport') {
         const p = inst.params;
         const shape = p.vpShape;
@@ -102,6 +103,20 @@ export function hideCropOverlay() {
     setCropPreviewActive(false);
     _hideActive();
     processImageImmediate();   // re-render with crop transform applied
+}
+
+export function showLineDragOverlay(inst) {
+    _shapeKey   = 'lineDragFadeShape';
+    _wKey       = 'lineDragFadeW';
+    _hKey       = 'lineDragFadeH';
+    _angleKey   = 'lineDragFadeAngle';
+    _enabledKey = 'lineDragFadeEnabled';
+    _activate('lineDrag', inst, 'lineDragX', 'lineDragY');
+    drawLineDrag(inst.params);
+}
+
+export function hideLineDragOverlay() {
+    if (_mode === 'lineDrag') _hideActive();
 }
 
 // ── Activation / deactivation ─────────────────────────────────────────────────
@@ -277,6 +292,132 @@ function hitTestFade(e) {
     if (Math.hypot(mx - rotHandle[0], my - rotHandle[1]) <= HIT_RADIUS) return 'rot';
     if (Math.hypot(mx - edgeW[0],     my - edgeW[1])     <= HIT_RADIUS) return 'edgeW';
     if (Math.hypot(mx - edgeH[0],     my - edgeH[1])     <= HIT_RADIUS) return 'edgeH';
+    return null;
+}
+
+// LineDrag — dashed control line + anchor dot; fade shape handles when fade enabled
+function drawLineDrag(p) {
+    syncSize();
+    const w = uiOverlay.width, h = uiOverlay.height;
+    uiCtx.clearRect(0, 0, w, h);
+
+    // Anchor uses 0-100 system (0=left/top)
+    const cx = (p.lineDragX / 100) * w;
+    const cy = (p.lineDragY / 100) * h;
+
+    // Dashed control line spanning the canvas at current angle
+    const angleRad = p.lineDragAngle * Math.PI / 180;
+    const cos = Math.cos(angleRad), sin = Math.sin(angleRad);
+    const ext = Math.max(w, h) * 2;
+    uiCtx.beginPath();
+    uiCtx.moveTo(cx - cos * ext, cy - sin * ext);
+    uiCtx.lineTo(cx + cos * ext, cy + sin * ext);
+    uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
+    uiCtx.lineWidth   = 1.5;
+    uiCtx.setLineDash([5, 5]);
+    uiCtx.stroke();
+    uiCtx.setLineDash([]);
+
+    // Fade shape + handles when fade is enabled
+    if (p[_enabledKey]) {
+        const shape  = p[_shapeKey] ?? 'ellipse';
+        const fAngle = (p[_angleKey] ?? 0) * Math.PI / 180;
+        const cosA   = Math.cos(fAngle), sinA = Math.sin(fAngle);
+        const fcx    = (0.5 + p.lineDragFadeX / 100) * w;
+        const fcy    = (0.5 - p.lineDragFadeY / 100) * h;
+        const rotPt  = (lx, ly) => [fcx + lx * cosA - ly * sinA, fcy + lx * sinA + ly * cosA];
+
+        uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
+        uiCtx.lineWidth   = 1.5;
+        uiCtx.setLineDash([5, 5]);
+
+        let edgeW, edgeH, rotHandle, topEdge;
+        if (shape === 'ellipse') {
+            const a = (p[_wKey] / 100) * w / 2;
+            const b = (p[_hKey] / 100) * h / 2;
+            uiCtx.beginPath();
+            uiCtx.ellipse(fcx, fcy, Math.max(1, a), Math.max(1, b), fAngle, 0, Math.PI * 2);
+            uiCtx.stroke();
+            edgeW     = rotPt(a, 0);
+            edgeH     = rotPt(0, -b);
+            topEdge   = edgeH;
+            rotHandle = rotPt(0, -(b + 22));
+        } else {
+            const hw = (p[_wKey] / 100) * w / 2;
+            const hh = (p[_hKey] / 100) * h / 2;
+            uiCtx.save();
+            uiCtx.translate(fcx, fcy);
+            uiCtx.rotate(fAngle);
+            uiCtx.beginPath();
+            uiCtx.rect(-hw, -hh, hw * 2, hh * 2);
+            uiCtx.stroke();
+            uiCtx.restore();
+            edgeW     = rotPt(hw, 0);
+            edgeH     = rotPt(0, -hh);
+            topEdge   = edgeH;
+            rotHandle = rotPt(0, -(hh + 22));
+        }
+
+        uiCtx.setLineDash([]);
+        uiCtx.beginPath();
+        uiCtx.moveTo(topEdge[0], topEdge[1]);
+        uiCtx.lineTo(rotHandle[0], rotHandle[1]);
+        uiCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+        uiCtx.lineWidth   = 1;
+        uiCtx.stroke();
+
+        drawCornerHandle(edgeW[0], edgeW[1]);
+        drawCornerHandle(edgeH[0], edgeH[1]);
+        drawRotHandle(rotHandle[0], rotHandle[1]);
+        drawHandle(fcx, fcy);
+    }
+
+    // Anchor dot drawn last so it sits on top
+    drawHandle(cx, cy);
+}
+
+function hitTestLineDrag(e) {
+    const inst = getStack().find(i => i.id === _instId);
+    if (!inst) return null;
+    const rect = canvas.getBoundingClientRect();
+    const mx   = e.clientX - rect.left;
+    const my   = e.clientY - rect.top;
+    const W    = uiOverlay.width, H = uiOverlay.height;
+    const p    = inst.params;
+
+    // Anchor dot (0-100 system)
+    const cx = (p.lineDragX / 100) * W;
+    const cy = (p.lineDragY / 100) * H;
+    if (Math.hypot(mx - cx, my - cy) <= HIT_RADIUS) return 'center';
+
+    if (!p[_enabledKey]) return null;
+
+    // Fade handles (-50..50 system)
+    const fAngle  = (p[_angleKey] ?? 0) * Math.PI / 180;
+    const cosA    = Math.cos(fAngle), sinA = Math.sin(fAngle);
+    const fcx     = (0.5 + p.lineDragFadeX / 100) * W;
+    const fcy     = (0.5 - p.lineDragFadeY / 100) * H;
+    const rotPt   = (lx, ly) => [fcx + lx * cosA - ly * sinA, fcy + lx * sinA + ly * cosA];
+    const shape   = p[_shapeKey] ?? 'ellipse';
+    let edgeW, edgeH, rotHandle;
+    if (shape === 'ellipse') {
+        const a   = (p[_wKey] / 100) * W / 2;
+        const b   = (p[_hKey] / 100) * H / 2;
+        edgeW     = rotPt(a, 0);
+        edgeH     = rotPt(0, -b);
+        rotHandle = rotPt(0, -(b + 22));
+    } else {
+        const hw  = (p[_wKey] / 100) * W / 2;
+        const hh  = (p[_hKey] / 100) * H / 2;
+        edgeW     = rotPt(hw, 0);
+        edgeH     = rotPt(0, -hh);
+        rotHandle = rotPt(0, -(hh + 22));
+    }
+
+    if (Math.hypot(mx - rotHandle[0], my - rotHandle[1]) <= HIT_RADIUS) return 'rot';
+    if (Math.hypot(mx - edgeW[0],     my - edgeW[1])     <= HIT_RADIUS) return 'edgeW';
+    if (Math.hypot(mx - edgeH[0],     my - edgeH[1])     <= HIT_RADIUS) return 'edgeH';
+    if (Math.hypot(mx - fcx,          my - fcy)          <= HIT_RADIUS) return 'fadeCenter';
     return null;
 }
 
@@ -850,6 +991,12 @@ function onHover(e) {
     } else if (_mode === 'fade') {
         const h = hitTestFade(e);
         uiOverlay.style.cursor = h === 'center' ? 'grab' : h === 'rot' ? 'crosshair' : h === 'edgeW' ? 'ew-resize' : h === 'edgeH' ? 'ns-resize' : 'default';
+    } else if (_mode === 'lineDrag') {
+        const h = hitTestLineDrag(e);
+        uiOverlay.style.cursor = (h === 'center' || h === 'fadeCenter') ? 'grab'
+            : h === 'rot' ? 'crosshair'
+            : h === 'edgeW' ? 'ew-resize'
+            : h === 'edgeH' ? 'ns-resize' : 'default';
     } else {
         uiOverlay.style.cursor = hitTest(e) ? 'grab' : 'default';
     }
@@ -899,6 +1046,15 @@ function onDown(e) {
         _dragging = true;
         uiOverlay.setPointerCapture(e.pointerId);
         uiOverlay.style.cursor = h === 'center' ? 'grabbing' : h === 'rot' ? 'crosshair' : h === 'edgeW' ? 'ew-resize' : 'ns-resize';
+    } else if (_mode === 'lineDrag') {
+        const h = hitTestLineDrag(e);
+        if (!h) return;
+        _handle   = h;
+        _dragging = true;
+        uiOverlay.setPointerCapture(e.pointerId);
+        uiOverlay.style.cursor = (h === 'center' || h === 'fadeCenter') ? 'grabbing'
+            : h === 'rot' ? 'crosshair'
+            : h === 'edgeW' ? 'ew-resize' : 'ns-resize';
     } else {
         if (!hitTest(e)) return;
         _dragging = true;
@@ -1055,6 +1211,35 @@ function onDrag(e) {
             if (deg < -180) deg += 360;
             setInstanceParam(_instId, _angleKey, Math.round(deg));
         }
+    } else if (_mode === 'lineDrag') {
+        const mx  = e.clientX - rect.left;
+        const my  = e.clientY - rect.top;
+        const W   = uiOverlay.width, H = uiOverlay.height;
+        const p   = inst.params;
+        const fcx = (0.5 + p.lineDragFadeX / 100) * W;
+        const fcy = (0.5 - p.lineDragFadeY / 100) * H;
+        if (_handle === 'center') {
+            const x = Math.round(Math.max(0, Math.min(100, (mx / W) * 100)));
+            const y = Math.round(Math.max(0, Math.min(100, (my / H) * 100)));
+            setInstanceParam(_instId, 'lineDragX', x);
+            setInstanceParam(_instId, 'lineDragY', y);
+        } else if (_handle === 'fadeCenter') {
+            const x = Math.round(Math.max(-50, Math.min(50,  (mx / W - 0.5) * 100)));
+            const y = Math.round(Math.max(-50, Math.min(50, -(my / H - 0.5) * 100)));
+            setInstanceParam(_instId, 'lineDragFadeX', x);
+            setInstanceParam(_instId, 'lineDragFadeY', y);
+        } else if (_handle === 'edgeW') {
+            const newW = Math.abs(mx - fcx) / (W / 2) * 100;
+            setInstanceParam(_instId, _wKey, Math.round(Math.max(1, Math.min(200, newW))));
+        } else if (_handle === 'edgeH') {
+            const newH = Math.abs(my - fcy) / (H / 2) * 100;
+            setInstanceParam(_instId, _hKey, Math.round(Math.max(1, Math.min(200, newH))));
+        } else if (_handle === 'rot') {
+            let deg = Math.atan2(my - fcy, mx - fcx) * 180 / Math.PI + 90;
+            if (deg > 180)  deg -= 360;
+            if (deg < -180) deg += 360;
+            setInstanceParam(_instId, _angleKey, Math.round(deg));
+        }
     } else {
         const x = Math.round(Math.max(-50, Math.min(50, ((e.clientX - rect.left) / rect.width  - 0.5) * 100)));
         const y = Math.round(Math.max(-50, Math.min(50, -((e.clientY - rect.top)  / rect.height - 0.5) * 100)));
@@ -1080,4 +1265,5 @@ function onUp() {
     if (_mode === 'crop')       drawCrop(inst.params);
     if (_mode === 'matrixRain') drawMatrixRain(inst.params);
     if (_mode === 'viewport')   drawViewport(inst.params);
+    if (_mode === 'lineDrag')   drawLineDrag(inst.params);
 }
