@@ -21,6 +21,9 @@
     <meta name="description" content="Retro photo effects editor — grain, VHS, CRT, and more.">
 
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="preload" href="/fonts/splitbitsv2.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="/fonts/neogreekrunic.ttf" as="font" type="font/ttf" crossorigin>
+    
 </head>
 <body>
     <div class="app-container">
@@ -145,6 +148,13 @@
             <div class="modal-actions">
                 <button class="btn btn-primary" id="closeExportPreviewBtn">Done</button>
             </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="mobileWarningModal">
+        <div class="modal mobile-warning-modal">
+            <p>This app is still under active development. It is recommended that you use the app on a desktop, laptop, or large tablet.</p>
+            <button class="btn mobile-warning-ok" id="mobileWarningOk">OK</button>
         </div>
     </div>
 

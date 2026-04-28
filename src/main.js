@@ -206,3 +206,13 @@ initMobileUI();
 initBottomSheet();
 initTouchGestures();
 initLogo();
+
+// Mobile warning
+const mobileWarningModal = document.getElementById('mobileWarningModal');
+const isMobile = window.innerWidth < 1024 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+if (!isMobile) {
+    mobileWarningModal.classList.add('hidden');
+}
+document.getElementById('mobileWarningOk').addEventListener('click', () => {
+    mobileWarningModal.classList.add('hidden');
+});

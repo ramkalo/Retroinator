@@ -30,39 +30,40 @@ function generateSeeds(numSeeds, centerX, centerY, clusterR, chunkSize, rng) {
     return seeds;
 }
 
-function applyBranching(chunkMap, seeds, infectRadius, chunkW, chunkH, rng) {
-    const queue = [];
+function applyBranching(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed) {
     const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
     for (let s = 0; s < seeds.length; s++) {
+        const rng = mulberry32(baseSeed ^ Math.imul(s + 11, 0x9e3779b9));
+        const queue = [];
         const cx = Math.max(0, Math.min(chunkW - 1, Math.round(seeds[s].cx)));
         const cy = Math.max(0, Math.min(chunkH - 1, Math.round(seeds[s].cy)));
         const idx = cy * chunkW + cx;
         if (chunkMap[idx] === -1) {
             chunkMap[idx] = s;
-            queue.push({ cx, cy, dist: 0, seed: s });
+            queue.push({ cx, cy, dist: 0 });
         }
-    }
 
-    let head = 0;
-    while (head < queue.length) {
-        const { cx, cy, dist, seed } = queue[head++];
-        if (dist >= infectRadius) continue;
+        let head = 0;
+        while (head < queue.length) {
+            const { cx: qx, cy: qy, dist } = queue[head++];
+            if (dist >= infectRadius) continue;
 
-        const numBranches = Math.max(1, Math.ceil(3 * (1 - dist / Math.max(1, infectRadius))));
-        const shuffled = dirs.slice();
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(rng() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        for (let b = 0; b < numBranches; b++) {
-            const [dx, dy] = shuffled[b];
-            const nx = cx + dx, ny = cy + dy;
-            if (nx < 0 || nx >= chunkW || ny < 0 || ny >= chunkH) continue;
-            const nidx = ny * chunkW + nx;
-            if (chunkMap[nidx] !== -1) continue;
-            chunkMap[nidx] = seed;
-            queue.push({ cx: nx, cy: ny, dist: dist + 1, seed });
+            const numBranches = Math.max(1, Math.ceil(3 * (1 - dist / Math.max(1, infectRadius))));
+            const shuffled = dirs.slice();
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(rng() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            for (let b = 0; b < numBranches; b++) {
+                const [dx, dy] = shuffled[b];
+                const nx = qx + dx, ny = qy + dy;
+                if (nx < 0 || nx >= chunkW || ny < 0 || ny >= chunkH) continue;
+                const nidx = ny * chunkW + nx;
+                if (chunkMap[nidx] !== -1) continue;
+                chunkMap[nidx] = s;
+                queue.push({ cx: nx, cy: ny, dist: dist + 1 });
+            }
         }
     }
 }
@@ -105,8 +106,9 @@ function fillPolygon(chunkMap, seedIdx, cx, cy, verts, chunkW, chunkH) {
     }
 }
 
-function applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, rng) {
+function applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed) {
     for (let s = 0; s < seeds.length; s++) {
+        const rng = mulberry32(baseSeed ^ Math.imul(s + 1, 0x9e3779b9));
         const scx = Math.round(seeds[s].cx);
         const scy = Math.round(seeds[s].cy);
         const N   = 3 + Math.floor(rng() * 6); // 3–8 sides, consistent per splat
@@ -149,10 +151,11 @@ function applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, rng) {
     }
 }
 
-function applyChains(chunkMap, seeds, infectRadius, chunkW, chunkH, rng) {
+function applyChains(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed) {
     const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
     for (let s = 0; s < seeds.length; s++) {
+        const rng = mulberry32(baseSeed ^ Math.imul(s + 21, 0x9e3779b9));
         const numChains = 2 + Math.floor(rng() * 3);
         for (let c = 0; c < numChains; c++) {
             let wx = Math.max(0, Math.min(chunkW - 1, Math.round(seeds[s].cx)));
@@ -188,20 +191,19 @@ function walkPath(chunkMap, seedIdx, startCX, startCY, pathLength, chunkW, chunk
     const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     markChunk(chunkMap, seedIdx, cx, cy, chunkW, chunkH);
     for (let step = 0; step < pathLength; step++) {
+        // Always consume the same RNG calls regardless of boundary contact
         if (rng() < 0.2) dirIdx = (dirIdx + (rng() < 0.5 ? 1 : 3)) % 4;
         const [dx, dy] = dirs[dirIdx];
-        const nx = cx + dx, ny = cy + dy;
-        if (nx < 0 || nx >= chunkW || ny < 0 || ny >= chunkH) {
-            dirIdx = Math.floor(rng() * 4);
-            continue;
-        }
-        cx = nx; cy = ny;
+        // Clamp to bounds without changing direction or consuming extra RNG
+        cx = Math.max(0, Math.min(chunkW - 1, cx + dx));
+        cy = Math.max(0, Math.min(chunkH - 1, cy + dy));
         markChunk(chunkMap, seedIdx, cx, cy, chunkW, chunkH);
     }
 }
 
-function applyPath(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, numPaths, rng) {
+function applyPath(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, numPaths, baseSeed) {
     for (let i = 0; i < numPaths; i++) {
+        const rng    = mulberry32(baseSeed ^ Math.imul(i + 31, 0x9e3779b9));
         const angle  = rng() * Math.PI * 2;
         const r      = Math.sqrt(rng()) * clusterR;
         const startCX = (centerX + Math.cos(angle) * r) / chunkSize;
@@ -251,6 +253,7 @@ export default {
     name:  'corrupted',
     label: 'Corrupted',
     pass:  'pre-crt',
+    handleParams: ['corruptedX', 'corruptedY'],
     paramKeys: ['corruptedSeeds', 'corruptedSeed', 'corruptedPattern', 'corruptedColor', 'corruptedColorMode', 'corruptedInfect', 'corruptedChunkSize', 'corruptedCluster', 'corruptedX', 'corruptedY'],
     params: {
         corruptedEnabled:   { default: false },
@@ -286,7 +289,7 @@ void main() {
     float cy = floor(py / corruptedChunkSize);
 
     float u = (cx + 0.5) / chunkW;
-    float v = 1.0 - (cy + 0.5) / chunkH;
+    float v = (cy + 0.5) / chunkH;
     float zoneF = texture(uChunkTex, vec2(u, v)).r * 255.0;
     int zone = int(zoneF + 0.5) - 1;
 
@@ -350,15 +353,16 @@ function buildChunkMapGPU(p, imgW, imgH) {
     const seeds     = generateSeeds(p.corruptedSeeds, centerX, centerY, clusterR, chunkSize, rng);
     const pathLength = Math.round((p.corruptedInfect / 100) * chunkW * chunkH);
     const pat = p.corruptedPattern ?? 'splat';
-    if      (pat === 'splat')      applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, rng);
-    else if (pat === 'rubble')     applyChains(chunkMap, seeds, infectRadius, chunkW, chunkH, rng);
-    else if (pat === 'detonation') { applyChains(chunkMap, seeds, infectRadius, chunkW, chunkH, rng); applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, rng); }
-    else if (pat === 'outbreak')   { applyBranching(chunkMap, seeds, infectRadius, chunkW, chunkH, rng); applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, rng); }
-    else if (pat === 'overgrowth') { applyChains(chunkMap, seeds, infectRadius, chunkW, chunkH, rng); applyBranching(chunkMap, seeds, infectRadius, chunkW, chunkH, rng); }
-    else if (pat === 'worm')       applyPath(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, 1, rng);
-    else if (pat === '3-worms')    applyPath(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, 3, rng);
+    const baseSeed = p.corruptedSeed;
+    if      (pat === 'splat')      applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed);
+    else if (pat === 'rubble')     applyChains(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed);
+    else if (pat === 'detonation') { applyChains(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed); applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed); }
+    else if (pat === 'outbreak')   { applyBranching(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed); applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed); }
+    else if (pat === 'overgrowth') { applyChains(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed); applyBranching(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed); }
+    else if (pat === 'worm')       applyPath(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, 1, baseSeed);
+    else if (pat === '3-worms')    applyPath(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, 3, baseSeed);
 
-    else                           applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, rng);
+    else                           applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed);
     return { chunkMap, seeds, chunkW, chunkH };
 }
 

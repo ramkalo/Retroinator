@@ -2,7 +2,7 @@ import { EFFECT_CATALOG, getEffect } from '../effects/registry.js';
 import { getStack, addEffect, removeEffect, moveEffect, duplicateEffect, setInstanceParam } from '../state/effectStack.js';
 import { saveState } from '../state/undo.js';
 import { buildEffectBody } from './stackControls.js';
-import { showFadeOverlay, hideFadeOverlay, showBlurOverlay, hideBlurOverlay, showBlackBoxOverlay, hideBlackBoxOverlay, showCropOverlay, hideCropOverlay, showViewportOverlay, hideViewportOverlay, showMatrixRainOverlay, hideMatrixRainOverlay, showLineDragOverlay, hideLineDragOverlay, showChromaOverlay, hideChromaOverlay, showVignetteOverlay, hideVignetteOverlay } from './canvasPicker.js';
+import { showFadeOverlay, hideFadeOverlay, showBlurOverlay, hideBlurOverlay, showBlackBoxOverlay, hideBlackBoxOverlay, showCropOverlay, hideCropOverlay, showViewportOverlay, hideViewportOverlay, showMatrixRainOverlay, hideMatrixRainOverlay, showLineDragOverlay, hideLineDragOverlay, showChromaOverlay, hideChromaOverlay, showVignetteOverlay, hideVignetteOverlay, showCorruptedOverlay, hideCorruptedOverlay, showCRTCurvatureOverlay, hideCRTCurvatureOverlay, showTextOverlay, hideTextOverlay } from './canvasPicker.js';
 
 let _expandedId = null;
 
@@ -203,6 +203,7 @@ export function renderStackList() {
     const expandedInst = stack.find(i => i.id === _expandedId);
     const newEffect = expandedInst?.effectName;
 
+    if (newEffect !== 'text')       hideTextOverlay();
     if (newEffect !== 'fade')       hideFadeOverlay();
     if (newEffect !== 'blur')       hideBlurOverlay();
     if (newEffect !== 'blackBox')   hideBlackBoxOverlay();
@@ -212,8 +213,11 @@ export function renderStackList() {
     if (newEffect !== 'lineDrag')   hideLineDragOverlay();
     if (newEffect !== 'chroma')     hideChromaOverlay();
     if (newEffect !== 'vignette')   hideVignetteOverlay();
+    if (newEffect !== 'crtCurvature') hideCRTCurvatureOverlay();
+    if (newEffect !== 'corrupted')  hideCorruptedOverlay();
 
-    if      (newEffect === 'basic')    showFadeOverlay(expandedInst);
+    if      (newEffect === 'text')     showTextOverlay(expandedInst);
+    else if (newEffect === 'basic')    showFadeOverlay(expandedInst);
     else if (newEffect === 'blur')     showBlurOverlay(expandedInst);
     else if (newEffect === 'blackBox') showBlackBoxOverlay(expandedInst);
     else if (newEffect === 'crop')     showCropOverlay(expandedInst);
@@ -223,15 +227,22 @@ export function renderStackList() {
     else if (newEffect === 'chroma') {
         if (expandedInst.params.chromaMode === 'outline')
             showChromaOverlay(expandedInst);
-        else
+        else {
             hideChromaOverlay();
+            showFadeOverlay(expandedInst, 'chromaFadeX', 'chromaFadeY', 'chromaFadeShape', 'chromaFadeW', 'chromaFadeH', 'chromaFadeAngle', 'chromaFadeEnabled');
+        }
     }
-    else if (newEffect === 'vignette') showVignetteOverlay(expandedInst);
+    else if (newEffect === 'glow')
+        showFadeOverlay(expandedInst, 'glowFadeX', 'glowFadeY', 'glowFadeShape', 'glowFadeW', 'glowFadeH', 'glowFadeAngle', 'glowFadeEnabled');
+    else if (newEffect === 'vignette')  showVignetteOverlay(expandedInst);
+    else if (newEffect === 'crtCurvature') showCRTCurvatureOverlay(expandedInst);
+    else if (newEffect === 'corrupted') showCorruptedOverlay(expandedInst);
 }
 
 // --- Drag-and-drop ---
 
 let _dragId = null;
+let _dropPosition = 'before';
 
 function onDragStart(e) {
     _dragId = e.currentTarget.dataset.id;
@@ -240,25 +251,29 @@ function onDragStart(e) {
 
 function onDragOver(e) {
     e.preventDefault();
-    e.currentTarget.classList.add('drag-over');
+    const rect = e.currentTarget.getBoundingClientRect();
+    _dropPosition = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    document.querySelectorAll('.stack-item').forEach(el => el.classList.remove('drop-above', 'drop-below'));
+    e.currentTarget.classList.add(_dropPosition === 'before' ? 'drop-above' : 'drop-below');
 }
 
 function onDrop(e) {
     e.preventDefault();
     const targetId = e.currentTarget.dataset.id;
-    e.currentTarget.classList.remove('drag-over');
+    e.currentTarget.classList.remove('drop-above', 'drop-below');
     if (!_dragId || _dragId === targetId) return;
 
     const stack = getStack();
     const targetIndex = stack.findIndex(inst => inst.id === targetId);
+    const insertIndex = _dropPosition === 'after' ? targetIndex + 1 : targetIndex;
     saveState();
-    moveEffect(_dragId, targetIndex);
+    moveEffect(_dragId, insertIndex);
     renderStackList();
 }
 
 function onDragEnd(e) {
     e.currentTarget.draggable = false;
     e.currentTarget.classList.remove('dragging');
-    document.querySelectorAll('.stack-item').forEach(el => el.classList.remove('drag-over'));
+    document.querySelectorAll('.stack-item').forEach(el => el.classList.remove('drop-above', 'drop-below'));
     _dragId = null;
 }

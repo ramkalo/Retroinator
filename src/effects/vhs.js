@@ -1,45 +1,3 @@
-import { params } from '../state/params.js';
-import { canvas } from '../renderer/glstate.js';
-
-// --- VHS timestamp overlay (draws to canvas context) --------------------
-
-export function applyVHSTimestamp(ctx, p = params) {
-    ctx.font = `${p.vhsTimestampSize}px JetBrains Mono, monospace`;
-
-    if (p.vhsTimestampColor === 'black') {
-        ctx.fillStyle   = 'rgba(0,0,0,0.85)';
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    } else {
-        ctx.fillStyle   = 'rgba(255,255,255,0.85)';
-        ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-    }
-    ctx.lineWidth = 2;
-
-    const ts = p.vhsTimestamp;
-    const x = (0.5 + p.vhsTimestampX / 100) * canvas.width;
-    const y = (0.5 - p.vhsTimestampY / 100) * canvas.height;
-
-    ctx.strokeText(ts, x, y);
-    ctx.fillText(ts, x, y);
-}
-
-// --- CSS overlay canvas renderer -----------------------------------
-// Draws the timestamp onto an absolutely-positioned transparent canvas that
-// sits on top of the main canvas. Prevents timestamp from being re-rendered
-// on every pixel operation.
-
-export function renderTimestampOverlay(overlayCanvas) {
-    overlayCanvas.width  = canvas.width;
-    overlayCanvas.height = canvas.height;
-    const octx = overlayCanvas.getContext('2d');
-    octx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-    if (params.vhsTimestampEnabled && params.vhsTimestamp) {
-        applyVHSTimestamp(octx);
-    }
-}
-
-// --- Effect definitions -------------------------------------------------
-
 export const vhsEffect = {
     name: 'vhs',
     label: 'VHS Line Glitch',
@@ -128,19 +86,3 @@ void main() {
 `,
 };
 
-export const vhsTimestampEffect = {
-    name: 'vhsTimestamp',
-    label: 'VHS Timestamp',
-    pass: 'context',
-    paramKeys: ['vhsTimestamp', 'vhsTimestampSize', 'vhsTimestampX', 'vhsTimestampY', 'vhsTimestampColor'],
-    params: {
-        vhsTimestampEnabled: { default: false },
-        vhsTimestamp:        { default: 'DEC 31 1999 11:59:59' },
-        vhsTimestampSize:    { default: 64,           min: 8,  max: 512 },
-        vhsTimestampX:       { default: 0,             min: -50, max: 50  },
-        vhsTimestampY:       { default: 40,            min: -50, max: 50  },
-        vhsTimestampColor:   { default: 'white' },
-    },
-    enabled: (p) => p.vhsTimestampEnabled && !!p.vhsTimestamp,
-    canvas2d: applyVHSTimestamp,  // (ctx) => void
-};

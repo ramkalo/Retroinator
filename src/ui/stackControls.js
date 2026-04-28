@@ -25,13 +25,17 @@ const PARAM_LABELS = {
     // grain
     grainEnabled: 'Enable', grainIntensity: 'Intensity', grainSize: 'Grain Size',
     // glow
-    glowEnabled: 'Enable', glowThreshold: 'Threshold', glowRadius: 'Radius', glowIntensity: 'Intensity', glowFade: 'Fade', glowFadeX: 'Fade X', glowFadeY: 'Fade Y',
+    glowEnabled: 'Enable', glowThreshold: 'Threshold', glowRadius: 'Radius', glowIntensity: 'Intensity',
+    glowFade: 'Fade', glowFadeEnabled: 'Enable Fade', glowFadeShape: 'Shape',
+    glowFadeSlope: 'Transition Slope', glowFadeInvert: 'Invert Fade',
+    glowFadeAngle: 'Angle', glowFadeW: 'Width', glowFadeH: 'Height',
+    glowFadeX: 'X', glowFadeY: 'Y',
     // blur
     blurEdge: 'Edge Intensity', blurCenter: 'Center Intensity',
     blurEnabled: 'Enable', blurMode: 'Mode', blurRadius: 'Blur Radius',
     blurMajor: 'Major Axis', blurMinor: 'Minor Axis', blurAngle: 'Angle',
     blurCenterX: 'Center X', blurCenterY: 'Center Y',
-    blurPasses: 'Box Passes',
+    blurPasses: 'Blur Power',
     // vignette
     vignetteEnabled: 'Enable', vignetteMode: 'Mode', vignetteMajor: 'Major Axis',
     vignetteMinor: 'Minor Axis', vignetteAngle: 'Angle', vignetteEdge: 'Edge Brightness',
@@ -42,8 +46,8 @@ const PARAM_LABELS = {
     chromaRedX: 'Red X', chromaRedY: 'Red Y', chromaGreenX: 'Green X', chromaGreenY: 'Green Y',
     chromaBlueX: 'Blue X', chromaBlueY: 'Blue Y', chromaCyanX: 'Cyan X', chromaCyanY: 'Cyan Y',
     chromaMagentaX: 'Magenta X', chromaMagentaY: 'Magenta Y', chromaYellowX: 'Yellow X', chromaYellowY: 'Yellow Y',
-    chromaThreshold: 'Threshold', chromaThresholdReverse: 'Reverse Threshold',
-    chromaFade: 'Fade', chromaFadeRadius: 'Fade Radius', chromaFadeInvert: 'Invert Fade', chromaFadeX: 'Fade X', chromaFadeY: 'Fade Y',
+    chromaThreshold: 'Threshold', chromaThresholdTarget: 'Target', chromaThresholdReverse: 'Reverse Threshold',
+    chromaFadeEnabled: 'Enable Fade', chromaFade: 'Fade', chromaFadeSlope: 'Transition Slope', chromaFadeInvert: 'Invert Fade',
     // invert
     invertEnabled: 'Enable', invertColorA: 'Color A', invertColorB: 'Color B',
     invertTarget: 'Target', invertIntensity: 'Threshold', invertReverse: 'Reverse Threshold',
@@ -53,9 +57,14 @@ const PARAM_LABELS = {
     // vhs
     vhsEnabled: 'Enable', vhsTracking: 'Line Glitch', vhsTrackingThickness: 'Thickness', vhsTrackingAmount: 'Amount', vhsTrackingSeed: 'Spacing', vhsTrackingColor: 'Line Color',
     vhsTrackingAngle: 'Line Angle', vhsTrackingWobble: 'Angle Wobble', vhsTrackingWobbleSeed: 'Wobble Seed', vhsTrackingWobbleBtn: 'Wobble Lines',
-    // vhsTimestamp
-    vhsTimestampEnabled: 'Enable', vhsTimestamp: 'Text', vhsTimestampSize: 'Size',
-    vhsTimestampX: 'X', vhsTimestampY: 'Y', vhsTimestampColor: 'Color',
+    // text
+    textEnabled: 'Enable', text: 'Text', textFont: 'Font', textSize: 'Size',
+    textBold: 'Bold', textItalic: 'Italic', textStrike: 'Strikethrough', textLineHeight: 'Line Height',
+    textColor: 'Color', textBg: 'Background',
+    textWrap: 'Word Wrap', textAlign: 'Justify', textVAlign: 'V-Align',
+    textTLx: 'TL X', textTLy: 'TL Y', textTRx: 'TR X', textTRy: 'TR Y',
+    textBRx: 'BR X', textBRy: 'BR Y', textBLx: 'BL X', textBLy: 'BL Y',
+    textBoxReset: 'Reset Box',
     // waves
     wavesEnabled: 'Enable', wavesR: 'Red', wavesG: 'Green', wavesB: 'Blue', wavesPhase: 'Phase',
     wavesFadeEnabled: 'Enable Fade', wavesFadeShape: 'Shape',
@@ -78,10 +87,11 @@ const PARAM_LABELS = {
     corruptedInfect: 'Infect', corruptedChunkSize: 'Chunk Size',
     corruptedCluster: 'Cluster', corruptedX: 'Center X', corruptedY: 'Center Y',
     // crt
-    crtCurvatureEnabled: 'Enable', crtCurvature: 'Curvature', crtCurvatureRadius: 'Radius',
-    crtCurvatureIntensity: 'Intensity', crtCurvatureX: 'Center X', crtCurvatureY: 'Center Y',
+    crtCurvatureEnabled: 'Enable', crtCurvatureStrength: 'Strength',
+    crtCurvatureX: 'Center X', crtCurvatureY: 'Center Y',
+    crtCurvatureMajor: 'Major Axis', crtCurvatureMinor: 'Minor Axis', crtCurvatureAngle: 'Angle',
     crtScanlineEnabled: 'Enable', crtScanline: 'Scanline', crtScanSpacing: 'Scan Spacing',
-    crtStaticEnabled: 'Enable', crtStatic: 'Static', crtStaticType: 'Static Type',
+    crtStaticEnabled: 'Enable', crtStatic: 'Static', crtStaticType: 'Static Type', crtStaticGrain: 'Grain Size',
     // viewport
     vpEnabled: 'Enable', vpShape: 'Shape', vpPost: 'Post Mode', vpInvert: 'Invert', vpSides: 'Sides',
     // doubleExposure
@@ -90,7 +100,7 @@ const PARAM_LABELS = {
     doubleExposureReverse: 'Reverse Threshold',
     // chanSat
     chanSatEnabled: 'Enable', chanSatRed: 'Red', chanSatGreen: 'Green', chanSatBlue: 'Blue',
-    chanSatThreshold: 'Min Saturation', chanSatAmount: 'Saturation', chanSatBlend: 'Blend',
+    chanSatThreshold: 'Target Saturation', chanSatAmount: 'Saturation',
     // matrixRain
     matrixRainEnabled: 'Enable', matrixRainText: 'Text', matrixRainMode: 'Mode',
     matrixRainInjectEnabled: 'Enable Inject', matrixRainInjectPercent: 'Inject %', matrixRainInjectSeed: 'Inject Seed',
@@ -109,7 +119,9 @@ const PARAM_OPTIONS = {
     cropAspect: [['original', 'Original'], ['1:1', '1:1 (Square)'], ['4:3', '4:3'], ['16:9', '16:9'], ['3:2', '3:2']],
     blurMode:     [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
     vignetteMode: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-    chromaMode:   [['classic', 'Linear'], ['outline', 'Radial'], ['waves', 'Waves']],
+    chromaMode:             [['classic', 'Linear'], ['outline', 'Radial'], ['waves', 'Waves']],
+    chromaFadeShape:        [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
+    chromaThresholdTarget:  [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']],
     invertColorA: [
         ['bk', 'Black'],
         ['r',  'Red'],
@@ -132,8 +144,30 @@ const PARAM_OPTIONS = {
     ],
     invertTarget: [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']],
     vhsTrackingColor: [['shift', 'Shift (default)'], ['white', 'White'], ['black', 'Black'], ['noise', 'Noise'], ['color', 'Color Noise']],
-    vhsTimestampColor: [['white', 'White'], ['black', 'Black']],
-    crtStaticType: [['white', 'White'], ['color', 'Color'], ['luma', 'Luma']],
+    textColor: [
+        ['white','White'], ['black','Black'],
+        ['red','Red'], ['green','Green'], ['blue','Blue'],
+        ['cyan','Cyan'], ['yellow','Yellow'], ['magenta','Magenta'],
+        ['greyNoise','Grey Noise'], ['colorNoise','Color Noise'],
+    ],
+    textBg: [
+        ['none','None'], ['black','Black'], ['white','White'],
+        ['semi-black','Semi Black'], ['semi-white','Semi White'],
+    ],
+    textAlign:  [['left','Left'], ['center','Center'], ['right','Right'], ['justify','Justify']],
+    textVAlign: [['top','Top'], ['middle','Middle'], ['bottom','Bottom']],
+    textFont: [
+        ["'JetBrains Mono', monospace",  'JetBrains Mono'],
+        ['monospace',                    'Monospace'],
+        ["'Courier New', monospace",     'Courier New'],
+        ["'Arial', sans-serif",          'Arial'],
+        ["'Georgia', serif",             'Georgia'],
+        ["'Times New Roman', serif",     'Times New Roman'],
+        ['neogreekrunic',                'neogreekrunic'],
+        ['splitbitsv2',                  'splitbitsv2'],
+    ],
+    glowFadeShape: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
+    crtStaticType: [['white', 'White'], ['grey', 'Greyscale'], ['color', 'Color'], ['luma', 'Luma'], ['image', 'Image']],
     doubleExposureChannelMode: [['all', 'All'], ['r', 'R only'], ['g', 'G only'], ['b', 'B only'], ['rg', 'R + G'], ['rb', 'R + B'], ['gb', 'G + B']],
     doubleExposureBlendMode: [['screen', 'Screen'], ['multiply', 'Multiply'], ['add', 'Add'], ['overlay', 'Overlay'], ['difference', 'Difference']],
     smearDirection: [['ltr', 'Left → Right'], ['rtl', 'Right → Left'], ['ttb', 'Top → Bottom'], ['btu', 'Bottom → Top']],
@@ -317,6 +351,31 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         return group;
     }
 
+    // Reset Box button for text effect
+    if (key === 'textBoxReset') {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = label;
+        btn.addEventListener('click', () => {
+            saveState();
+            setInstanceParam(inst.id, 'textTLx', 10);
+            setInstanceParam(inst.id, 'textTLy', 65);
+            setInstanceParam(inst.id, 'textTRx', 90);
+            setInstanceParam(inst.id, 'textTRy', 65);
+            setInstanceParam(inst.id, 'textBRx', 90);
+            setInstanceParam(inst.id, 'textBRy', 95);
+            setInstanceParam(inst.id, 'textBLx', 10);
+            setInstanceParam(inst.id, 'textBLy', 95);
+        });
+        row.appendChild(btn);
+        group.appendChild(row);
+        return group;
+    }
+
     // Rotate checkboxes (radio-like - only one can be checked)
     if (key === 'rotate90') {
         const group = document.createElement('div');
@@ -409,7 +468,7 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
     }
 
     // Textarea for multi-line text entry
-    if (key === 'matrixRainText') {
+    if (key === 'matrixRainText' || key === 'text') {
         const group = document.createElement('div');
         group.className = 'control-group';
         const labelEl = document.createElement('div');
@@ -421,11 +480,26 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         textarea.rows = 4;
         textarea.dataset.instParam = key;
         textarea.style.cssText = 'width:100%;resize:vertical;box-sizing:border-box;font-size:0.8rem;';
+        if (key === 'text') textarea.maxLength = 5000;
         textarea.addEventListener('input', () => {
             setInstanceParam(inst.id, key, textarea.value);
         });
         group.appendChild(labelEl);
         group.appendChild(textarea);
+        if (key === 'text') {
+            const tsBtn = document.createElement('button');
+            tsBtn.className = 'btn';
+            tsBtn.textContent = 'Timestamp';
+            tsBtn.style.cssText = 'padding:2px 8px;font-size:0.7rem;margin-top:4px;';
+            tsBtn.addEventListener('click', () => {
+                const now = new Date();
+                const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+                const ts = `${months[now.getMonth()]} ${String(now.getDate()).padStart(2,'0')} ${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+                setInstanceParam(inst.id, key, ts);
+                textarea.value = ts;
+            });
+            group.appendChild(tsBtn);
+        }
         return group;
     }
 
@@ -471,22 +545,6 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         });
         row.appendChild(labelEl);
         row.appendChild(input);
-        
-        // Add "Now" button for vhsTimestamp
-        if (key === 'vhsTimestamp') {
-            const nowBtn = document.createElement('button');
-            nowBtn.className = 'btn';
-            nowBtn.textContent = 'Now';
-            nowBtn.style.cssText = 'padding:2px 6px;font-size:0.7rem;margin-left:4px;';
-            nowBtn.addEventListener('click', () => {
-                const now = new Date();
-                const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-                const ts = `${months[now.getMonth()]} ${String(now.getDate()).padStart(2,'0')} ${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-                setInstanceParam(inst.id, key, ts);
-                input.value = ts;
-            });
-            row.appendChild(nowBtn);
-        }
         
         group.appendChild(row);
         return group;

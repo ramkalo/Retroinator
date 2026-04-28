@@ -8,12 +8,14 @@ import chanSatEffect        from './chanSat.js';
 import vignetteEffect       from './vignette.js';
 import blurEffect           from './blur.js';
 import invertEffect          from './invert.js';
-import { vhsEffect, vhsTimestampEffect } from './vhs.js';
+import { vhsEffect } from './vhs.js';
+import { textEffect } from './text.js';
 import digitalSmearEffect   from './digitalSmear.js';
 import lineDragEffect       from './lineDrag.js';
 import corruptedEffect      from './corrupted.js';
 import crtCurvatureEffect   from './crtCurvature.js';
 import crtScanlinesEffect   from './crtScanlines.js';
+import moireEffect          from './moire.js';
 import crtStaticEffect      from './crtStatic.js';
 import transformEffect      from './transform.js';
 import cropEffect           from './crop.js';
@@ -51,7 +53,7 @@ export const EFFECTS = [
     glowEffect,
     invertEffect,
     vhsEffect,
-    vhsTimestampEffect,
+    textEffect,
     matrixRainEffect,
     digitalSmearEffect,
     lineDragEffect,
@@ -59,6 +61,7 @@ export const EFFECTS = [
     crtCurvatureEffect,
     crtScanlinesEffect,
     crtStaticEffect,
+    moireEffect,
     viewportEffect,
 ];
 
@@ -99,8 +102,7 @@ export function buildControlLimits() {
 }
 
 /**
- * The user-browseable effect catalog — excludes internal sub-effects
- * like vhsTimestampEffect which is typically stacked alongside vhsEffect.
+ * The user-browseable effect catalog.
  * Each entry: { name, label, description }
  */
 export const EFFECT_CATALOG = [
@@ -122,11 +124,12 @@ export const EFFECT_CATALOG = [
     { name: 'glow',           label: 'Glow',                 description: 'Bloom halo around bright areas' },
     { name: 'invert',         label: 'Invert',               description: 'Color inversion with threshold' },
     { name: 'matrixRain',   label: 'Matrix Rain',          description: 'Tile text characters across the image in configurable grid patterns' },
+    // { name: 'moire',        label: 'Moire',                description: 'Two overlapping line grids that interfere to produce wave and band patterns' },
     { name: 'transform',      label: 'Rotate',               description: 'Flip and rotate' },
+    { name: 'text',            label: 'Text',                 description: 'Text overlay with paragraph box, formatting, and canvas handles' },
+    { name: 'vhs',            label: 'VHS Line Glitch',      description: 'Tracking line glitch bands' },
     { name: 'viewport',      label: 'Viewport',             description: 'Reveal a shaped window that cuts through selected effects' },
     { name: 'vignette',       label: 'Vignette',             description: 'Edge darkening or brightening' },
-    { name: 'vhs',            label: 'VHS Line Glitch',      description: 'Tracking line glitch bands' },
-    { name: 'vhsTimestamp',   label: 'VHS Timestamp',        description: 'Retro timestamp text overlay' },
 ];
 
 /**

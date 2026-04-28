@@ -3,7 +3,7 @@ export default {
     label: 'Line Drag',
     pass:  'pre-crt',
 
-    handleParams: ['lineDragX', 'lineDragY', 'lineDragFadeX', 'lineDragFadeY',
+    handleParams: ['lineDragX', 'lineDragY', 'lineDragAngle', 'lineDragFadeX', 'lineDragFadeY',
                    'lineDragFadeW', 'lineDragFadeH', 'lineDragFadeAngle'],
 
     paramKeys: [

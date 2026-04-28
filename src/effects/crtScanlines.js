@@ -8,6 +8,10 @@ export default {
         crtScanline:        { default: 0, min: 0, max: 100 },
         crtScanSpacing:     { default: 4, min: 2, max: 12  },
     },
+    uiGroups: [
+        { label: 'Warning: this app is still under development. When using the CRT scanlines effect you may notice difference between what you see and what gets exported. Until I fix this issue I recommend taking a screen shot of the final image as this will often preserve moire effects better', keys: [] },
+        { keys: ['crtScanlineEnabled', 'crtScanline', 'crtScanSpacing'] },
+    ],
     enabled: (p) => p.crtScanlineEnabled,
     glsl: `
 uniform float crtScanline;

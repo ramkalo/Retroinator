@@ -8,17 +8,18 @@ const uiOverlay = document.getElementById('uiOverlay');
 const uiCtx     = uiOverlay.getContext('2d');
 
 // Active overlay state — only one active at a time
-let _mode       = null;   // 'fade' | 'blur' | 'blackBox' | 'crop' | 'viewport' | 'lineDrag' | 'chroma' | 'vignette' | null
+let _mode       = null;   // 'fade' | 'blur' | 'blackBox' | 'crop' | 'viewport' | 'lineDrag' | 'chroma' | 'vignette' | 'text' | null
 let _instId     = null;
 let _dragging   = false;
 let _xKey       = null;
 let _yKey       = null;
 let _shapeKey   = null;   // fade: param key for shape enum
-let _wKey       = null;   // fade: param key for W (ellipse X / rect half-width)
-let _hKey       = null;   // fade: param key for H (ellipse Y / rect half-height)
-let _angleKey   = null;   // fade: param key for rotation angle (degrees)
+let _wKey       = null;   // fade/text: param key for W
+let _hKey       = null;   // fade: param key for H
+let _angleKey   = null;   // fade/text: param key for rotation angle (degrees)
 let _enabledKey = null;   // fade: param key for enabled boolean
-let _handle     = null;   // blackBox/crop/viewport: handle name
+let _skewKey    = null;   // text: param key for skew X angle
+let _handle     = null;   // blackBox/crop/viewport/text: handle name
 let _dragAnchor = null;   // crop corner drag: { oppX, oppY, signX, signY }
 
 let _vpResetting = false;  // re-entrancy guard for _resetPolygonVertices
@@ -36,6 +37,9 @@ onStackChange((key) => {
     if (_mode === 'lineDrag')   drawLineDrag(inst.params);
     if (_mode === 'chroma')     drawChroma(inst.params);
     if (_mode === 'vignette')   drawVignette(inst.params);
+    if (_mode === 'crtCurvature') drawCRTCurvature(inst.params);
+    if (_mode === 'corrupted')  drawCorrupted(inst.params);
+    if (_mode === 'text')       drawTextOverlay(inst.params);
     if (_mode === 'viewport') {
         const p = inst.params;
         const shape = p.vpShape;
@@ -139,6 +143,27 @@ export function hideVignetteOverlay() {
     if (_mode === 'vignette') _hideActive();
 }
 
+export function showCRTCurvatureOverlay(inst) {
+    _wKey = 'crtCurvatureMajor';
+    _hKey = 'crtCurvatureMinor';
+    _angleKey = 'crtCurvatureAngle';
+    _activate('crtCurvature', inst, 'crtCurvatureX', 'crtCurvatureY');
+    drawCRTCurvature(inst.params);
+}
+
+export function hideCRTCurvatureOverlay() {
+    if (_mode === 'crtCurvature') _hideActive();
+}
+
+export function showCorruptedOverlay(inst) {
+    _activate('corrupted', inst, 'corruptedX', 'corruptedY');
+    drawCorrupted(inst.params);
+}
+
+export function hideCorruptedOverlay() {
+    if (_mode === 'corrupted') _hideActive();
+}
+
 // ── Activation / deactivation ─────────────────────────────────────────────────
 
 function _activate(mode, inst, xKey, yKey) {
@@ -168,6 +193,7 @@ function _hideActive() {
     _hKey       = null;
     _angleKey   = null;
     _enabledKey = null;
+    _skewKey    = null;
     _handle     = null;
     _dragAnchor = null;
     clear();
@@ -338,6 +364,22 @@ function drawLineDrag(p) {
     uiCtx.stroke();
     uiCtx.setLineDash([]);
 
+    // Rotation handle for line angle: perpendicular to the line, 22px away
+    const perpAngleRad = angleRad + Math.PI / 2;
+    const perpCos = Math.cos(perpAngleRad), perpSin = Math.sin(perpAngleRad);
+    const rotHandleX = cx + perpCos * 22;
+    const rotHandleY = cy + perpSin * 22;
+
+    // Connector line from anchor to rotation handle
+    uiCtx.beginPath();
+    uiCtx.moveTo(cx, cy);
+    uiCtx.lineTo(rotHandleX, rotHandleY);
+    uiCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+    uiCtx.lineWidth   = 1;
+    uiCtx.stroke();
+
+    drawRotHandle(rotHandleX, rotHandleY);
+
     // Fade shape + handles when fade is enabled
     if (p[_enabledKey]) {
         const shape  = p[_shapeKey] ?? 'ellipse';
@@ -410,6 +452,14 @@ function hitTestLineDrag(e) {
     const cy = (p.lineDragY / 100) * H;
     if (Math.hypot(mx - cx, my - cy) <= HIT_RADIUS) return 'center';
 
+    // Line rotation handle
+    const angleRad = p.lineDragAngle * Math.PI / 180;
+    const perpAngleRad = angleRad + Math.PI / 2;
+    const perpCos = Math.cos(perpAngleRad), perpSin = Math.sin(perpAngleRad);
+    const rotHandleX = cx + perpCos * 22;
+    const rotHandleY = cy + perpSin * 22;
+    if (Math.hypot(mx - rotHandleX, my - rotHandleY) <= HIT_RADIUS) return 'lineRot';
+
     if (!p[_enabledKey]) return null;
 
     // Fade handles (-50..50 system)
@@ -461,6 +511,8 @@ function drawBlur(p) {
     const a     = Math.max(1, (p.blurMajor / 100) * 0.7071 * w);
     const b     = Math.max(1, (p.blurMinor / 100) * 0.7071 * h);
     const angle = p.blurAngle * Math.PI / 180;
+    const cosA  = Math.cos(angle), sinA = Math.sin(angle);
+    const rotPt = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
 
     uiCtx.save();
     uiCtx.translate(cx, cy);
@@ -478,6 +530,20 @@ function drawBlur(p) {
     uiCtx.setLineDash([]);
     uiCtx.restore();
 
+    const edgeW     = rotPt(a, 0);
+    const edgeH     = rotPt(0, -b);
+    const rotHandle = rotPt(0, -(b + 22));
+
+    uiCtx.beginPath();
+    uiCtx.moveTo(edgeH[0], edgeH[1]);
+    uiCtx.lineTo(rotHandle[0], rotHandle[1]);
+    uiCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+    uiCtx.lineWidth   = 1;
+    uiCtx.stroke();
+
+    drawCornerHandle(edgeW[0], edgeW[1]);
+    drawCornerHandle(edgeH[0], edgeH[1]);
+    drawRotHandle(rotHandle[0], rotHandle[1]);
     drawHandle(cx, cy);
 }
 
@@ -527,6 +593,97 @@ function drawVignette(p) {
     drawHandle(cx, cy);
 }
 
+function drawCorrupted(p) {
+    syncSize();
+    const w = uiOverlay.width, h = uiOverlay.height;
+    uiCtx.clearRect(0, 0, w, h);
+    const cx = (0.5 + p.corruptedX / 100) * w;
+    const cy = (0.5 - p.corruptedY / 100) * h;
+    drawHandle(cx, cy);
+}
+
+function drawCRTCurvature(p) {
+    syncSize();
+    const w = uiOverlay.width, h = uiOverlay.height;
+    uiCtx.clearRect(0, 0, w, h);
+
+    const cx    = (0.5 + p.crtCurvatureX / 100) * w;
+    const cy    = (0.5 - p.crtCurvatureY / 100) * h;
+    const a     = Math.max(1, (p.crtCurvatureMajor / 100) * 0.7071 * w);
+    const b     = Math.max(1, (p.crtCurvatureMinor / 100) * 0.7071 * h);
+    const angle = p.crtCurvatureAngle * Math.PI / 180;
+    const cosA  = Math.cos(angle), sinA = Math.sin(angle);
+    const rotPt = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
+
+    uiCtx.save();
+    uiCtx.translate(cx, cy);
+    uiCtx.rotate(angle);
+    uiCtx.beginPath();
+    uiCtx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+    uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
+    uiCtx.lineWidth   = 1.5;
+    uiCtx.setLineDash([5, 5]);
+    uiCtx.stroke();
+    uiCtx.setLineDash([]);
+    uiCtx.restore();
+
+    const edgeW     = rotPt(a, 0);
+    const edgeH     = rotPt(0, -b);
+    const rotHandle = rotPt(0, -(b + 22));
+
+    uiCtx.beginPath();
+    uiCtx.moveTo(edgeH[0], edgeH[1]);
+    uiCtx.lineTo(rotHandle[0], rotHandle[1]);
+    uiCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+    uiCtx.lineWidth   = 1;
+    uiCtx.stroke();
+
+    drawCornerHandle(edgeW[0], edgeW[1]);
+    drawCornerHandle(edgeH[0], edgeH[1]);
+    drawRotHandle(rotHandle[0], rotHandle[1]);
+    drawHandle(cx, cy);
+}
+
+function hitTestCorrupted(e) {
+    const inst = getStack().find(i => i.id === _instId);
+    if (!inst) return null;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const W = uiOverlay.width, H = uiOverlay.height;
+    const p = inst.params;
+    const cx = (0.5 + p.corruptedX / 100) * W;
+    const cy = (0.5 - p.corruptedY / 100) * H;
+    if (Math.hypot(mx - cx, my - cy) <= HIT_RADIUS) return 'center';
+    return null;
+}
+
+function hitTestCRTCurvature(e) {
+    const inst = getStack().find(i => i.id === _instId);
+    if (!inst) return null;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const W = uiOverlay.width, H = uiOverlay.height;
+    const p = inst.params;
+    const cx    = (0.5 + p.crtCurvatureX / 100) * W;
+    const cy    = (0.5 - p.crtCurvatureY / 100) * H;
+    const a     = Math.max(1, (p.crtCurvatureMajor / 100) * 0.7071 * W);
+    const b     = Math.max(1, (p.crtCurvatureMinor / 100) * 0.7071 * H);
+    const angle = p.crtCurvatureAngle * Math.PI / 180;
+    const cosA  = Math.cos(angle), sinA = Math.sin(angle);
+    const rotPt = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
+    const edgeW     = rotPt(a, 0);
+    const edgeH     = rotPt(0, -b);
+    const rotHandle = rotPt(0, -(b + 22));
+
+    if (Math.hypot(mx - cx,           my - cy)           <= HIT_RADIUS) return 'center';
+    if (Math.hypot(mx - rotHandle[0], my - rotHandle[1]) <= HIT_RADIUS) return 'rot';
+    if (Math.hypot(mx - edgeW[0],     my - edgeW[1])     <= HIT_RADIUS) return 'edgeW';
+    if (Math.hypot(mx - edgeH[0],     my - edgeH[1])     <= HIT_RADIUS) return 'edgeH';
+    return null;
+}
+
 function hitTestVignette(e) {
     const inst = getStack().find(i => i.id === _instId);
     if (!inst) return null;
@@ -540,6 +697,32 @@ function hitTestVignette(e) {
     const a     = Math.max(1, (p.vignetteMajor / 100) * 0.7071 * W);
     const b     = Math.max(1, (p.vignetteMinor / 100) * 0.7071 * H);
     const angle = p.vignetteAngle * Math.PI / 180;
+    const cosA  = Math.cos(angle), sinA = Math.sin(angle);
+    const rotPt = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
+    const edgeW     = rotPt(a, 0);
+    const edgeH     = rotPt(0, -b);
+    const rotHandle = rotPt(0, -(b + 22));
+
+    if (Math.hypot(mx - cx,           my - cy)           <= HIT_RADIUS) return 'center';
+    if (Math.hypot(mx - rotHandle[0], my - rotHandle[1]) <= HIT_RADIUS) return 'rot';
+    if (Math.hypot(mx - edgeW[0],     my - edgeW[1])     <= HIT_RADIUS) return 'edgeW';
+    if (Math.hypot(mx - edgeH[0],     my - edgeH[1])     <= HIT_RADIUS) return 'edgeH';
+    return null;
+}
+
+function hitTestBlur(e) {
+    const inst = getStack().find(i => i.id === _instId);
+    if (!inst) return null;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const W = uiOverlay.width, H = uiOverlay.height;
+    const p = inst.params;
+    const cx    = (0.5 + p.blurCenterX / 100) * W;
+    const cy    = (0.5 - p.blurCenterY / 100) * H;
+    const a     = Math.max(1, (p.blurMajor / 100) * 0.7071 * W);
+    const b     = Math.max(1, (p.blurMinor / 100) * 0.7071 * H);
+    const angle = p.blurAngle * Math.PI / 180;
     const cosA  = Math.cos(angle), sinA = Math.sin(angle);
     const rotPt = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
     const edgeW     = rotPt(a, 0);
@@ -811,6 +994,89 @@ function drawCrop(p) {
 }
 
 // ── Viewport overlay ──────────────────────────────────────────────────────────
+
+export function showTextOverlay(inst) {
+    _activate('text', inst, 'textTLx', 'textTLy');
+    drawTextOverlay(inst.params);
+}
+
+export function hideTextOverlay() {
+    if (_mode === 'text') _hideActive();
+}
+
+function _textCorners(p, W, H) {
+    const tlx  = (p.textTLx ?? 10) / 100 * W,  tly  = (p.textTLy ?? 65) / 100 * H;
+    const trx  = (p.textTRx ?? 90) / 100 * W,  try_ = (p.textTRy ?? 65) / 100 * H;
+    const brx  = (p.textBRx ?? 90) / 100 * W,  bry  = (p.textBRy ?? 95) / 100 * H;
+    const blx  = (p.textBLx ?? 10) / 100 * W,  bly  = (p.textBLy ?? 95) / 100 * H;
+    // Centroid of all 4 corners
+    const cx = (tlx + trx + brx + blx) / 4;
+    const cy = (tly + try_ + bry + bly) / 4;
+    // Rotation handle: 22px above top-edge midpoint, outward from box
+    const topMidX = (tlx + trx) / 2, topMidY = (tly + try_) / 2;
+    const edgeX = trx - tlx, edgeY = try_ - tly;
+    const edgeLen = Math.hypot(edgeX, edgeY) || 1;
+    let rpx = -edgeY / edgeLen, rpy = edgeX / edgeLen;
+    const botMidX = (blx + brx) / 2, botMidY = (bly + bry) / 2;
+    if (rpx * (botMidX - topMidX) + rpy * (botMidY - topMidY) > 0) { rpx = -rpx; rpy = -rpy; }
+    const rhx = topMidX + 22 * rpx, rhy = topMidY + 22 * rpy;
+    return { tlx, tly, trx, try_, brx, bry, blx, bly, cx, cy, topMidX, topMidY, rhx, rhy };
+}
+
+function drawTextOverlay(p) {
+    syncSize();
+    const W = uiOverlay.width, H = uiOverlay.height;
+    uiCtx.clearRect(0, 0, W, H);
+
+    const { tlx, tly, trx, try_, brx, bry, blx, bly, cx, cy, topMidX, topMidY, rhx, rhy } = _textCorners(p, W, H);
+
+    // Box outline
+    uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
+    uiCtx.lineWidth   = 1.5;
+    uiCtx.setLineDash([5, 5]);
+    uiCtx.beginPath();
+    uiCtx.moveTo(tlx, tly);
+    uiCtx.lineTo(trx, try_);
+    uiCtx.lineTo(brx, bry);
+    uiCtx.lineTo(blx, bly);
+    uiCtx.closePath();
+    uiCtx.stroke();
+    uiCtx.setLineDash([]);
+
+    // Rotation handle connector + handle
+    uiCtx.beginPath();
+    uiCtx.moveTo(topMidX, topMidY);
+    uiCtx.lineTo(rhx, rhy);
+    uiCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+    uiCtx.lineWidth   = 1;
+    uiCtx.stroke();
+    drawRotHandle(rhx, rhy);
+
+    // Four independent corner handles + center
+    drawCornerHandle(tlx, tly);
+    drawCornerHandle(trx, try_);
+    drawCornerHandle(brx, bry);
+    drawCornerHandle(blx, bly);
+    drawHandle(cx, cy);
+}
+
+function hitTestText(e) {
+    const inst = getStack().find(i => i.id === _instId);
+    if (!inst) return null;
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const W = uiOverlay.width, H = uiOverlay.height;
+    const { tlx, tly, trx, try_, brx, bry, blx, bly, cx, cy, rhx, rhy } = _textCorners(inst.params, W, H);
+    const d = (ax, ay) => Math.hypot(mx - ax, my - ay);
+
+    if (d(rhx, rhy)  <= HIT_RADIUS) return 'rot';
+    if (d(tlx, tly)  <= HIT_RADIUS) return 'tl';
+    if (d(trx, try_) <= HIT_RADIUS) return 'tr';
+    if (d(brx, bry)  <= HIT_RADIUS) return 'br';
+    if (d(blx, bly)  <= HIT_RADIUS) return 'bl';
+    if (d(cx,  cy)   <= HIT_RADIUS) return 'center';
+    return null;
+}
 
 export function showMatrixRainOverlay(inst) {
     _activate('matrixRain', inst, 'matrixRainX', 'matrixRainY');
@@ -1095,7 +1361,7 @@ function onHover(e) {
     } else if (_mode === 'lineDrag') {
         const h = hitTestLineDrag(e);
         uiOverlay.style.cursor = (h === 'center' || h === 'fadeCenter') ? 'grab'
-            : h === 'rot' ? 'crosshair'
+            : (h === 'rot' || h === 'lineRot') ? 'crosshair'
             : h === 'edgeW' ? 'ew-resize'
             : h === 'edgeH' ? 'ns-resize' : 'default';
     } else if (_mode === 'vignette') {
@@ -1104,6 +1370,21 @@ function onHover(e) {
             : h === 'rot'   ? 'crosshair'
             : h === 'edgeW' ? 'ew-resize'
             : h === 'edgeH' ? 'ns-resize' : 'default';
+    } else if (_mode === 'blur') {
+        const h = hitTestBlur(e);
+        uiOverlay.style.cursor = h === 'center' ? 'grab'
+            : h === 'rot'   ? 'crosshair'
+            : h === 'edgeW' ? 'ew-resize'
+            : h === 'edgeH' ? 'ns-resize' : 'default';
+    } else if (_mode === 'corrupted') {
+        uiOverlay.style.cursor = hitTestCorrupted(e) ? 'grab' : 'default';
+    } else if (_mode === 'text') {
+        const h = hitTestText(e);
+        uiOverlay.style.cursor = h === 'center' ? 'grab'
+            : h === 'rot' ? 'crosshair'
+            : (h === 'tl' || h === 'br') ? 'nwse-resize'
+            : (h === 'tr' || h === 'bl') ? 'nesw-resize'
+            : 'default';
     } else {
         uiOverlay.style.cursor = hitTest(e) ? 'grab' : 'default';
     }
@@ -1160,7 +1441,7 @@ function onDown(e) {
         _dragging = true;
         uiOverlay.setPointerCapture(e.pointerId);
         uiOverlay.style.cursor = (h === 'center' || h === 'fadeCenter') ? 'grabbing'
-            : h === 'rot' ? 'crosshair'
+            : (h === 'rot' || h === 'lineRot') ? 'crosshair'
             : h === 'edgeW' ? 'ew-resize' : 'ns-resize';
     } else if (_mode === 'vignette') {
         const h = hitTestVignette(e);
@@ -1170,6 +1451,52 @@ function onDown(e) {
         uiOverlay.setPointerCapture(e.pointerId);
         uiOverlay.style.cursor = h === 'center' ? 'grabbing'
             : h === 'rot' ? 'crosshair' : 'nwse-resize';
+    } else if (_mode === 'blur') {
+        const h = hitTestBlur(e);
+        if (!h) return;
+        _handle   = h;
+        _dragging = true;
+        uiOverlay.setPointerCapture(e.pointerId);
+        uiOverlay.style.cursor = h === 'center' ? 'grabbing'
+            : h === 'rot' ? 'crosshair' : 'nwse-resize';
+    } else if (_mode === 'crtCurvature') {
+        const h = hitTestCRTCurvature(e);
+        if (!h) return;
+        _handle   = h;
+        _dragging = true;
+        uiOverlay.setPointerCapture(e.pointerId);
+        uiOverlay.style.cursor = h === 'center' ? 'grabbing'
+            : h === 'rot' ? 'crosshair' : 'nwse-resize';
+    } else if (_mode === 'corrupted') {
+        const h = hitTestCorrupted(e);
+        if (!h) return;
+        _handle   = h;
+        _dragging = true;
+        uiOverlay.setPointerCapture(e.pointerId);
+        uiOverlay.style.cursor = 'grabbing';
+    } else if (_mode === 'text') {
+        const h = hitTestText(e);
+        if (!h) return;
+        _handle   = h;
+        _dragging = true;
+        uiOverlay.setPointerCapture(e.pointerId);
+        uiOverlay.style.cursor = h === 'center' ? 'grabbing' : h === 'rot' ? 'crosshair' : 'nwse-resize';
+        if (h === 'center' || h === 'rot') {
+            const rect2 = canvas.getBoundingClientRect();
+            const inst2 = getStack().find(i => i.id === _instId);
+            const p2    = inst2?.params ?? {};
+            const W2    = uiOverlay.width, H2 = uiOverlay.height;
+            const { cx, cy } = _textCorners(p2, W2, H2);
+            _dragAnchor = {
+                startX: e.clientX - rect2.left, startY: e.clientY - rect2.top,
+                cxPx: cx, cyPx: cy,
+                startAngle: Math.atan2((e.clientY - rect2.top) - cy, (e.clientX - rect2.left) - cx),
+                tlx0: p2.textTLx ?? 10, tly0: p2.textTLy ?? 65,
+                trx0: p2.textTRx ?? 90, try0: p2.textTRy ?? 65,
+                brx0: p2.textBRx ?? 90, bry0: p2.textBRy ?? 95,
+                blx0: p2.textBLx ?? 10, bly0: p2.textBLy ?? 95,
+            };
+        }
     } else {
         if (!hitTest(e)) return;
         _dragging = true;
@@ -1331,6 +1658,8 @@ function onDrag(e) {
         const my  = e.clientY - rect.top;
         const W   = uiOverlay.width, H = uiOverlay.height;
         const p   = inst.params;
+        const cx = (p.lineDragX / 100) * W;
+        const cy = (p.lineDragY / 100) * H;
         const fcx = (0.5 + p.lineDragFadeX / 100) * W;
         const fcy = (0.5 - p.lineDragFadeY / 100) * H;
         if (_handle === 'center') {
@@ -1343,6 +1672,11 @@ function onDrag(e) {
             const y = Math.round(Math.max(-50, Math.min(50, -(my / H - 0.5) * 100)));
             setInstanceParam(_instId, 'lineDragFadeX', x);
             setInstanceParam(_instId, 'lineDragFadeY', y);
+        } else if (_handle === 'lineRot') {
+            let deg = Math.atan2(my - cy, mx - cx) * 180 / Math.PI + 90;
+            if (deg > 180)  deg -= 360;
+            if (deg < -180) deg += 360;
+            setInstanceParam(_instId, 'lineDragAngle', Math.round(deg));
         } else if (_handle === 'edgeW') {
             const newW = Math.abs(mx - fcx) / (W / 2) * 100;
             setInstanceParam(_instId, _wKey, Math.round(Math.max(1, Math.min(200, newW))));
@@ -1378,6 +1712,98 @@ function onDrag(e) {
             deg = ((deg % 180) + 180) % 180;
             setInstanceParam(_instId, 'vignetteAngle', Math.round(deg));
         }
+    } else if (_mode === 'blur') {
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const W  = uiOverlay.width, H = uiOverlay.height;
+        const p  = inst.params;
+        const cx = (0.5 + p.blurCenterX / 100) * W;
+        const cy = (0.5 - p.blurCenterY / 100) * H;
+        if (_handle === 'center') {
+            setInstanceParam(_instId, 'blurCenterX', Math.round(Math.max(-50, Math.min(50,  (mx / W - 0.5) * 100))));
+            setInstanceParam(_instId, 'blurCenterY', Math.round(Math.max(-50, Math.min(50, -(my / H - 0.5) * 100))));
+        } else if (_handle === 'edgeW') {
+            const ang  = p.blurAngle * Math.PI / 180;
+            const proj = (mx - cx) * Math.cos(ang) + (my - cy) * Math.sin(ang);
+            setInstanceParam(_instId, 'blurMajor', Math.round(Math.max(1, Math.min(150, Math.abs(proj) / (0.7071 * W) * 100))));
+        } else if (_handle === 'edgeH') {
+            const ang  = p.blurAngle * Math.PI / 180;
+            const proj = -(mx - cx) * Math.sin(ang) + (my - cy) * Math.cos(ang);
+            setInstanceParam(_instId, 'blurMinor', Math.round(Math.max(1, Math.min(150, Math.abs(proj) / (0.7071 * H) * 100))));
+        } else if (_handle === 'rot') {
+            let deg = Math.atan2(my - cy, mx - cx) * 180 / Math.PI + 90;
+            deg = ((deg % 180) + 180) % 180;
+            setInstanceParam(_instId, 'blurAngle', Math.round(deg));
+        }
+    } else if (_mode === 'crtCurvature') {
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const W  = uiOverlay.width, H = uiOverlay.height;
+        const p  = inst.params;
+        const cx = (0.5 + p.crtCurvatureX / 100) * W;
+        const cy = (0.5 - p.crtCurvatureY / 100) * H;
+        if (_handle === 'center') {
+            setInstanceParam(_instId, 'crtCurvatureX', Math.round(Math.max(-50, Math.min(50,  (mx / W - 0.5) * 100))));
+            setInstanceParam(_instId, 'crtCurvatureY', Math.round(Math.max(-50, Math.min(50, -(my / H - 0.5) * 100))));
+        } else if (_handle === 'edgeW') {
+            const ang  = p.crtCurvatureAngle * Math.PI / 180;
+            const proj = (mx - cx) * Math.cos(ang) + (my - cy) * Math.sin(ang);
+            setInstanceParam(_instId, 'crtCurvatureMajor', Math.round(Math.max(1, Math.min(150, Math.abs(proj) / (0.7071 * W) * 100))));
+        } else if (_handle === 'edgeH') {
+            const ang  = p.crtCurvatureAngle * Math.PI / 180;
+            const proj = -(mx - cx) * Math.sin(ang) + (my - cy) * Math.cos(ang);
+            setInstanceParam(_instId, 'crtCurvatureMinor', Math.round(Math.max(1, Math.min(150, Math.abs(proj) / (0.7071 * H) * 100))));
+        } else if (_handle === 'rot') {
+            let deg = Math.atan2(my - cy, mx - cx) * 180 / Math.PI + 90;
+            deg = ((deg % 180) + 180) % 180;
+            setInstanceParam(_instId, 'crtCurvatureAngle', Math.round(deg));
+        }
+    } else if (_mode === 'text') {
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const W  = uiOverlay.width, H = uiOverlay.height;
+        const toP = (v, range) => v / range * 100;
+
+        if (_handle === 'center' && _dragAnchor) {
+            const dx = toP(mx - _dragAnchor.startX, W);
+            const dy = toP(my - _dragAnchor.startY, H);
+            setInstanceParam(_instId, 'textTLx', _dragAnchor.tlx0 + dx);
+            setInstanceParam(_instId, 'textTLy', _dragAnchor.tly0 + dy);
+            setInstanceParam(_instId, 'textTRx', _dragAnchor.trx0 + dx);
+            setInstanceParam(_instId, 'textTRy', _dragAnchor.try0 + dy);
+            setInstanceParam(_instId, 'textBRx', _dragAnchor.brx0 + dx);
+            setInstanceParam(_instId, 'textBRy', _dragAnchor.bry0 + dy);
+            setInstanceParam(_instId, 'textBLx', _dragAnchor.blx0 + dx);
+            setInstanceParam(_instId, 'textBLy', _dragAnchor.bly0 + dy);
+        } else if (_handle === 'rot' && _dragAnchor) {
+            const { cxPx, cyPx, startAngle } = _dragAnchor;
+            const delta = Math.atan2(my - cyPx, mx - cxPx) - startAngle;
+            const cos = Math.cos(delta), sin = Math.sin(delta);
+            const rotPt = (xPct, yPct) => {
+                const dx = xPct / 100 * W - cxPx, dy = yPct / 100 * H - cyPx;
+                return [(cxPx + dx * cos - dy * sin) / W * 100,
+                        (cyPx + dx * sin + dy * cos) / H * 100];
+            };
+            const [ntlx, ntly] = rotPt(_dragAnchor.tlx0, _dragAnchor.tly0);
+            const [ntrx, ntry] = rotPt(_dragAnchor.trx0, _dragAnchor.try0);
+            const [nbrx, nbry] = rotPt(_dragAnchor.brx0, _dragAnchor.bry0);
+            const [nblx, nbly] = rotPt(_dragAnchor.blx0, _dragAnchor.bly0);
+            setInstanceParam(_instId, 'textTLx', ntlx); setInstanceParam(_instId, 'textTLy', ntly);
+            setInstanceParam(_instId, 'textTRx', ntrx); setInstanceParam(_instId, 'textTRy', ntry);
+            setInstanceParam(_instId, 'textBRx', nbrx); setInstanceParam(_instId, 'textBRy', nbry);
+            setInstanceParam(_instId, 'textBLx', nblx); setInstanceParam(_instId, 'textBLy', nbly);
+        } else if (_handle === 'tl') {
+            setInstanceParam(_instId, 'textTLx', toP(mx, W));
+            setInstanceParam(_instId, 'textTLy', toP(my, H));
+        } else if (_handle === 'tr') {
+            setInstanceParam(_instId, 'textTRx', toP(mx, W));
+            setInstanceParam(_instId, 'textTRy', toP(my, H));
+        } else if (_handle === 'br') {
+            setInstanceParam(_instId, 'textBRx', toP(mx, W));
+            setInstanceParam(_instId, 'textBRy', toP(my, H));
+        } else if (_handle === 'bl') {
+            setInstanceParam(_instId, 'textBLx', toP(mx, W));
+            setInstanceParam(_instId, 'textBLy', toP(my, H));
+        }
     } else {
         const x = Math.round(Math.max(-50, Math.min(50, ((e.clientX - rect.left) / rect.width  - 0.5) * 100)));
         const y = Math.round(Math.max(-50, Math.min(50, -((e.clientY - rect.top)  / rect.height - 0.5) * 100)));
@@ -1406,4 +1832,5 @@ function onUp() {
     if (_mode === 'lineDrag')   drawLineDrag(inst.params);
     if (_mode === 'chroma')     drawChroma(inst.params);
     if (_mode === 'vignette')   drawVignette(inst.params);
+    if (_mode === 'text')       drawTextOverlay(inst.params);
 }

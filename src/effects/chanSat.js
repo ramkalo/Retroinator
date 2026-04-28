@@ -2,7 +2,7 @@ export default {
     name:  'chanSat',
     label: 'Channel Saturation',
     pass:  'pre-crt',
-    paramKeys: ['chanSatRed', 'chanSatGreen', 'chanSatBlue', 'chanSatThreshold', 'chanSatAmount', 'chanSatBlend'],
+    paramKeys: ['chanSatRed', 'chanSatGreen', 'chanSatBlue', 'chanSatThreshold', 'chanSatAmount'],
     params: {
         chanSatEnabled:   { default: false },
         chanSatRed:       { default: false },
@@ -10,13 +10,11 @@ export default {
         chanSatBlue:      { default: false },
         chanSatThreshold: { default: 0,  min: 0,    max: 100 },
         chanSatAmount:    { default: 100,   min: -100, max: 100  },
-        chanSatBlend:     { default: 100, min: 0,    max: 100  },
     },
     enabled:  (p) => p.chanSatEnabled,
     glsl: `
 uniform float chanSatThreshold;
 uniform float chanSatAmount;
-uniform float chanSatBlend;
 uniform int   chanSatRed;
 uniform int   chanSatGreen;
 uniform int   chanSatBlue;
@@ -54,7 +52,6 @@ void main() {
     float h = hsl.x, s = hsl.y, l = hsl.z;
     float threshold = chanSatThreshold / 100.0;
     float satDelta  = chanSatAmount    / 100.0;
-    float blend     = chanSatBlend     / 100.0;
     if (s < threshold) { fragColor = c; return; }
     bool isRed   = h < 1.0/6.0 || h >= 5.0/6.0;
     bool isGreen = h >= 1.0/6.0 && h < 0.5;
@@ -63,7 +60,7 @@ void main() {
     if (!match) { fragColor = c; return; }
     float newS   = clamp(s + satDelta, 0.0, 1.0);
     vec3  modRgb = hsl2rgb(h, newS, l);
-    fragColor = vec4(c.rgb + (modRgb - c.rgb) * blend, c.a);
+    fragColor = vec4(modRgb, c.a);
 }
 `,
 };

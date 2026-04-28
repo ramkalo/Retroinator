@@ -3,9 +3,9 @@ export default {
     label: 'Blur',
     pass:  'pre-crt',
     paramKeys: ['blurEdge', 'blurCenter', 'blurPasses', 'blurMode', 'blurMajor', 'blurMinor', 'blurAngle', 'blurCenterX', 'blurCenterY'],
+    handleParams: ['blurMajor', 'blurMinor', 'blurAngle'],
     uiGroups: [
         { keys: ['blurEdge', 'blurCenter', 'blurPasses', 'blurMode'] },
-        { label: 'Shape', keys: ['blurMajor', 'blurMinor', 'blurAngle'] },
     ],
     params: {
         blurEnabled: { default: false },
