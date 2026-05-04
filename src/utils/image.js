@@ -46,6 +46,27 @@ export function loadSecondImage(file) {
     reader.readAsDataURL(file);
 }
 
+export function loadBlankCanvas(width, height, color) {
+    const offscreen = document.createElement('canvas');
+    offscreen.width = width;
+    offscreen.height = height;
+    const ctx = offscreen.getContext('2d');
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, width, height);
+
+    setOriginalImage(offscreen);
+
+    document.getElementById('imageInfo').textContent = `${width} × ${height}px`;
+    document.getElementById('dropZone').classList.add('hidden');
+    document.getElementById('exportBtn').disabled = false;
+    document.getElementById('savePresetBtn').disabled = false;
+    document.getElementById('exportBtnMobile').disabled = false;
+    document.getElementById('savePresetBtnMobile').disabled = false;
+
+    processImage();
+    showNotification(`Blank ${color === '#ffffff' ? 'white' : 'black'} canvas loaded`);
+}
+
 export function rescaleSecondImage() {
     if (!secondImage || !originalImage) return;
     // Upload second image as a texture; the shader samples with the same UV coordinates,

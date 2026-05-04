@@ -4,7 +4,7 @@ import { showNotification } from './utils/notifications.js';
 import { canvas } from './renderer/glstate.js';
 import { processImage } from './renderer/pipeline.js';
 import { cleanupWebGL } from './renderer/webgl.js';
-import { loadImage, loadSecondImage } from './utils/image.js';
+import { loadImage, loadSecondImage, loadBlankCanvas } from './utils/image.js';
 import { exportImage } from './ui/export.js';
 import { savePreset, loadPreset, renderPresetList, importPreset } from './ui/presets.js';
 import { initMobileUI } from './ui/mobile.js';
@@ -116,6 +116,16 @@ document.getElementById('dropZoneBtn').addEventListener('click', function(e) {
     e.stopPropagation();
     document.getElementById('fileInput').click();
 });
+
+document.getElementById('blankWhite1080').addEventListener('click', function(e) { e.stopPropagation(); loadBlankCanvas(1920, 1080, '#ffffff'); });
+document.getElementById('blankBlack1080').addEventListener('click', function(e) { e.stopPropagation(); loadBlankCanvas(1920, 1080, '#000000'); });
+document.getElementById('blankWhite1440').addEventListener('click', function(e) { e.stopPropagation(); loadBlankCanvas(2560, 1440, '#ffffff'); });
+document.getElementById('blankBlack1440').addEventListener('click', function(e) { e.stopPropagation(); loadBlankCanvas(2560, 1440, '#000000'); });
+
+document.getElementById('blankWhite1080p').addEventListener('click', function(e) { e.stopPropagation(); loadBlankCanvas(1080, 1920, '#ffffff'); });
+document.getElementById('blankBlack1080p').addEventListener('click', function(e) { e.stopPropagation(); loadBlankCanvas(1080, 1920, '#000000'); });
+document.getElementById('blankWhite1440p').addEventListener('click', function(e) { e.stopPropagation(); loadBlankCanvas(1440, 2560, '#ffffff'); });
+document.getElementById('blankBlack1440p').addEventListener('click', function(e) { e.stopPropagation(); loadBlankCanvas(1440, 2560, '#000000'); });
 
 document.getElementById('dropZone').addEventListener('dragover', function(e) {
     e.preventDefault();
