@@ -4,250 +4,6 @@ import { saveState } from '../state/undo.js';
 
 let activeSliderGroup = null;
 
-// Special UI metadata for params that need non-default rendering
-const PARAM_LABELS = {
-    // transform
-    transformEnabled: 'Enable', rotate90: '90°', rotate180: '180°', rotate270: '270°', flipH: 'Flip H', flipV: 'Flip V',
-    // crop
-    cropEnabled: 'Enable', cropAspect: 'Aspect', cropFlipAspect: 'Flip Aspect', cropX: 'X', cropY: 'Y', cropScale: 'Scale',
-    // basic
-    basicEnabled: 'Enable', brightness: 'Brightness', contrast: 'Contrast',
-    saturation: 'Saturation', highlights: 'Highlights', shadows: 'Shadows',
-    temperature: 'Temperature', tint: 'Tint',
-    basicFadeEnabled: 'Enable Fade', basicFadeShape: 'Shape',
-    basicFade: 'Fade', basicFadeW: 'Width', basicFadeH: 'Height',
-    basicFadeSlope: 'Transition Slope', basicFadeInvert: 'Invert Fade',
-    basicFadeX: 'Center X', basicFadeY: 'Center Y',
-    // grain
-    grainEnabled: 'Enable', grainIntensity: 'Intensity', grainSize: 'Grain Size',
-    // glow
-    glowEnabled: 'Enable', glowThreshold: 'Threshold', glowRadius: 'Radius', glowIntensity: 'Intensity',
-    glowFade: 'Fade', glowFadeEnabled: 'Enable Fade', glowFadeShape: 'Shape',
-    glowFadeSlope: 'Transition Slope', glowFadeInvert: 'Invert Fade',
-    glowFadeAngle: 'Angle', glowFadeW: 'Width', glowFadeH: 'Height',
-    glowFadeX: 'X', glowFadeY: 'Y',
-    // blur
-    blurEdge: 'Edge Intensity', blurCenter: 'Center Intensity',
-    blurEnabled: 'Enable', blurMode: 'Mode', blurRadius: 'Blur Radius',
-    blurMajor: 'Major Axis', blurMinor: 'Minor Axis', blurAngle: 'Angle',
-    blurCenterX: 'Center X', blurCenterY: 'Center Y',
-    blurPasses: 'Blur Power',
-    // vignette
-    vignetteEnabled: 'Enable', vignetteMode: 'Mode', vignetteMajor: 'Major Axis',
-    vignetteMinor: 'Minor Axis', vignetteAngle: 'Angle', vignetteEdge: 'Edge Brightness',
-    vignetteCenter: 'Center Brightness', vignetteCenterX: 'Center X', vignetteCenterY: 'Center Y',
-    vignetteTransition: 'Transition',
-    // chroma
-    chromaEnabled: 'Enable', chromaMode: 'Mode', chromaScale: 'Scale',
-    chromaRedX: 'Red X', chromaRedY: 'Red Y', chromaGreenX: 'Green X', chromaGreenY: 'Green Y',
-    chromaBlueX: 'Blue X', chromaBlueY: 'Blue Y', chromaCyanX: 'Cyan X', chromaCyanY: 'Cyan Y',
-    chromaMagentaX: 'Magenta X', chromaMagentaY: 'Magenta Y', chromaYellowX: 'Yellow X', chromaYellowY: 'Yellow Y',
-    chromaThreshold: 'Threshold', chromaThresholdTarget: 'Target', chromaThresholdReverse: 'Reverse Threshold',
-    chromaFadeEnabled: 'Enable Fade', chromaFade: 'Fade', chromaFadeSlope: 'Transition Slope', chromaFadeInvert: 'Invert Fade',
-    // invert
-    invertEnabled: 'Enable', invertColorA: 'Color A', invertColorB: 'Color B',
-    invertTarget: 'Target', invertIntensity: 'Threshold', invertReverse: 'Reverse Threshold',
-    // digitize
-    digitizeEnabled: 'Enable', pixelSize: 'Pixel Size', pixelColors: '# Colors',
-    digitizeDither: 'Dithering', digitizeNoise: 'Noise',
-    // vhs
-    vhsEnabled: 'Enable', vhsTracking: 'Line Glitch', vhsTrackingThickness: 'Thickness', vhsTrackingAmount: 'Amount', vhsTrackingSeed: 'Spacing', vhsTrackingColor: 'Line Color',
-    vhsTrackingAngle: 'Line Angle', vhsTrackingWobble: 'Angle Wobble', vhsTrackingWobbleSeed: 'Wobble Seed', vhsTrackingWobbleBtn: 'Wobble Lines',
-    // text
-    textEnabled: 'Enable', text: 'Text', textFont: 'Font', textSize: 'Size',
-    textBold: 'Bold', textItalic: 'Italic', textStrike: 'Strikethrough', textLineHeight: 'Line Height',
-    textColor: 'Color', textBg: 'Background',
-    textWrap: 'Word Wrap', textAlign: 'Justify', textVAlign: 'V-Align',
-    textTLx: 'TL X', textTLy: 'TL Y', textTRx: 'TR X', textTRy: 'TR Y',
-    textBRx: 'BR X', textBRy: 'BR Y', textBLx: 'BL X', textBLy: 'BL Y',
-    textBoxReset: 'Reset Box', textNoiseRandomize: 'Randomize',
-    // waves
-    wavesEnabled: 'Enable', wavesR: 'Red', wavesG: 'Green', wavesB: 'Blue', wavesPhase: 'Phase',
-    wavesFadeEnabled: 'Enable Fade', wavesFadeShape: 'Shape',
-    wavesFade: 'Fade', wavesFadeW: 'Width', wavesFadeH: 'Height',
-    wavesFadeSlope: 'Transition Slope', wavesFadeInvert: 'Invert Fade',
-    wavesFadeX: 'Center X', wavesFadeY: 'Center Y',
-    // lineDrag
-    lineDragEnabled: 'Enable', lineDragX: 'X', lineDragY: 'Y', lineDragAngle: 'Angle', lineDragDir: 'Direction',
-    lineDragTarget: 'Target', lineDragThreshold: 'Threshold',
-    lineDragThresholdReverse: 'Reverse Threshold', lineDragThresholdOnDest: 'On Destination',
-    lineDragFadeEnabled: 'Enable Fade', lineDragFadeShape: 'Shape',
-    lineDragFade: 'Fade', lineDragFadeW: 'Width', lineDragFadeH: 'Height',
-    lineDragFadeSlope: 'Transition Slope', lineDragFadeInvert: 'Invert Fade',
-    lineDragFadeX: 'Center X', lineDragFadeY: 'Center Y',
-    // digitalSmear
-    smearEnabled: 'Enable', smearWidth: 'Width', smearDirection: 'Direction', smearShift: 'Shift',
-    // corrupted
-    corruptedEnabled: 'Enable', corruptedSeeds: 'Seeds', corruptedSeed: 'Seed',
-    corruptedPattern: 'Pattern', corruptedColor: 'Color', corruptedColorMode: 'Color Mode',
-    corruptedInfect: 'Infect', corruptedChunkSize: 'Chunk Size',
-    corruptedCluster: 'Cluster', corruptedX: 'Center X', corruptedY: 'Center Y',
-    // crt
-    crtCurvatureEnabled: 'Enable', crtCurvatureStrength: 'Strength',
-    crtCurvatureX: 'Center X', crtCurvatureY: 'Center Y',
-    crtCurvatureMajor: 'Major Axis', crtCurvatureMinor: 'Minor Axis', crtCurvatureAngle: 'Angle',
-    crtScanlineEnabled: 'Enable', crtScanline: 'Scanline', crtScanSpacing: 'Scan Spacing',
-    crtStaticEnabled: 'Enable', crtStatic: 'Static', crtStaticType: 'Static Type', crtStaticGrain: 'Grain Size',
-    // viewport
-    vpEnabled: 'Enable', vpShape: 'Shape', vpPost: 'Post Mode', vpInvert: 'Invert', vpSides: 'Sides',
-    // doubleExposure
-    doubleExposureEnabled: 'Enable',
-    doubleExposureOrigOpacity: 'Image Opacity', doubleExposureOpacity: 'Blend Opacity',
-    doubleExposureChannelMode: 'Target Channel', doubleExposureBlendMode: 'Blend Mode',
-    doubleExposureIntensity: 'Luminance', doubleExposureReverseLum: 'Reverse',
-    doubleExposureThreshSat: 'Saturation', doubleExposureReverseSat: 'Reverse',
-    doubleExposureFadeEnabled: 'Enable Fade', doubleExposureFadeShape: 'Shape',
-    doubleExposureFade: 'Strength', doubleExposureFadeSlope: 'Transition', doubleExposureFadeInvert: 'Invert',
-    doubleExposureFadeX: 'Center X', doubleExposureFadeY: 'Center Y',
-    doubleExposureFadeW: 'Width', doubleExposureFadeH: 'Height', doubleExposureFadeAngle: 'Angle',
-    doubleExposureTexX: 'Image X', doubleExposureTexY: 'Image Y',
-    // shapeSticker
-    shapeStickerEnabled: 'Enable', shapeStickerX: 'Center X', shapeStickerY: 'Center Y',
-    shapeStickerW: 'Width', shapeStickerH: 'Height', shapeStickerAngle: 'Angle',
-    shapeStickerShape: 'Shape', shapeStickerSides: 'Sides',
-    shapeStickerFillType: 'Fill Type', shapeStickerSolidColor: 'Solid Color',
-    shapeStickerStaticType: 'Static Type', shapeStickerGrainSize: 'Grain Size',
-    shapeStickerStaticSeed: 'Seed',
-    shapeStickerGrabX: 'Grab X', shapeStickerGrabY: 'Grab Y',
-    shapeStickerGrabW: 'Grab Width', shapeStickerGrabH: 'Grab Height',
-    shapeStickerGrabAngle: 'Grab Angle', shapeStickerGrabMode: 'Grab Mode',
-    // chanSat
-    chanSatEnabled: 'Enable', chanSatRed: 'Red', chanSatGreen: 'Green', chanSatBlue: 'Blue',
-    chanSatThreshold: 'Target Saturation', chanSatAmount: 'Saturation',
-    // matrixRain
-    matrixRainEnabled: 'Enable', matrixRainText: 'Text', matrixRainMode: 'Mode',
-    matrixRainInjectEnabled: 'Enable Inject', matrixRainInjectPercent: 'Inject %', matrixRainInjectSeed: 'Inject Seed',
-    matrixRainSpaceInject: 'Inject Spaces',
-    matrixRainDirection: 'Direction', matrixRainOrder: 'Order',
-    matrixRainSize: 'Size', matrixRainCharSpacing: 'Char Spacing',
-    matrixRainLineSpacing: 'Line Spacing', matrixRainWordSpacing: 'Word Spacing',
-    matrixRainFont: 'Font',
-    matrixRainX: 'X', matrixRainY: 'Y',
-    matrixRainColor: 'Color', matrixRainOpacity: 'Opacity',
-};
-
-// Select options for enum params
-const PARAM_OPTIONS = {
-    vpShape: [['rectangle', 'Rectangle'], ['circle', 'Circle'], ['triangle', 'Triangle'], ['polygon', 'Polygon']],
-    cropAspect: [['original', 'Original'], ['1:1', '1:1 (Square)'], ['4:3', '4:3'], ['16:9', '16:9'], ['3:2', '3:2']],
-    blurMode:     [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-    vignetteMode: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-    chromaMode:             [['classic', 'Linear'], ['outline', 'Radial'], ['waves', 'Waves']],
-    chromaFadeShape:        [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-    chromaThresholdTarget:  [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']],
-    invertColorA: [
-        ['all', 'All Colors'],
-        ['r',  'Red'],
-        ['g',  'Green'],
-        ['b',  'Blue'],
-        ['c',  'Cyan'],
-        ['y',  'Yellow'],
-        ['m',  'Magenta'],
-        ['w',  'White'],
-        ['bk', 'Black'],
-    ],
-    invertColorB: [
-        ['r',  'Red'],
-        ['g',  'Green'],
-        ['b',  'Blue'],
-        ['c',  'Cyan'],
-        ['y',  'Yellow'],
-        ['m',  'Magenta'],
-        ['w',  'White'],
-        ['bk', 'Black'],
-    ],
-    invertTarget: [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']],
-    vhsTrackingColor: [['shift', 'Shift (default)'], ['white', 'White'], ['black', 'Black'], ['noise', 'Noise'], ['color', 'Color Noise']],
-    textColor: [
-        ['white','White'], ['black','Black'],
-        ['red','Red'], ['green','Green'], ['blue','Blue'],
-        ['cyan','Cyan'], ['yellow','Yellow'], ['magenta','Magenta'],
-        ['greyNoise','Grey Noise'], ['colorNoise','Color Noise'],
-        ['paletteNoise','Image Palette'],
-    ],
-    textBg: [
-        ['none','None'], ['black','Black'], ['white','White'],
-        ['semi-black','Semi Black'], ['semi-white','Semi White'],
-    ],
-    textAlign:  [['left','Left'], ['center','Center'], ['right','Right'], ['justify','Justify']],
-    textVAlign: [['top','Top'], ['middle','Middle'], ['bottom','Bottom']],
-    textFont: [
-        ["'JetBrains Mono', monospace",  'JetBrains Mono'],
-        ['monospace',                    'Monospace'],
-        ["'Courier New', monospace",     'Courier New'],
-        ["'Arial', sans-serif",          'Arial'],
-        ["'Georgia', serif",             'Georgia'],
-        ["'Times New Roman', serif",     'Times New Roman'],
-        ['neogreekrunic',                'neogreekrunic'],
-        ['splitbitsv2',                  'splitbitsv2'],
-    ],
-    glowFadeShape: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-    crtStaticType: [['white', 'White'], ['grey', 'Greyscale'], ['color', 'Color'], ['luma', 'Luma'], ['image', 'Image']],
-    doubleExposureChannelMode: [['all', 'All'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']],
-    doubleExposureBlendMode: [['screen', 'Screen'], ['multiply', 'Multiply'], ['add', 'Add'], ['overlay', 'Overlay'], ['difference', 'Difference']],
-    doubleExposureFadeShape: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-    smearDirection: [['ltr', 'Left → Right'], ['rtl', 'Right → Left'], ['ttb', 'Top → Bottom'], ['btu', 'Bottom → Top']],
-    corruptedPattern: [
-        ['splat',        'Splat'],
-        ['rubble',       'Rubble'],
-        ['detonation',   'Detonation'],
-        ['outbreak',     'Outbreak'],
-        ['overgrowth',   'Overgrowth'],
-        ['worm',         'Worm'],
-        ['3-worms',      '3 Worms'],
-
-    ],
-    corruptedColor: [
-        ['r', 'Red'], ['g', 'Green'], ['b', 'Blue'],
-        ['c', 'Cyan'], ['m', 'Magenta'], ['y', 'Yellow'], ['rgb', 'White'],
-        ['static', 'Static Noise'], ['color-static', 'Color Static'],
-        ['perimeter', 'Perimeter'], ['inside', 'Inside'], ['border', 'Image Border'],
-        ['center', 'Image Center'], ['random-img', 'Random from Image'],
-    ],
-    corruptedColorMode: [['per-chunk', 'Per Chunk'], ['per-zone', 'Per Zone'], ['glitched', 'Glitched']],
-    matrixRainMode: [
-        ['wordOrder',         'Word Order'],
-        ['spaceShuffle',      'Space Shuffle'],
-        ['wordShuffle',       'Word Shuffle'],
-        ['randomFromContent', 'Random from Content'],
-        ['randomAlpha',       'Random Alpha'],
-        ['randomNumeric',     'Random Numeric'],
-        ['randomAlphanumeric','Random Alphanumeric'],
-        ['randomExtended',    'Random Extended (96)'],
-    ],
-    matrixRainDirection: [['columns', 'Columns'], ['rows', 'Rows']],
-    matrixRainOrder:     [['forward', 'Forward'], ['reverse', 'Reverse']],
-    matrixRainFont: [
-        ['monospace',                   'Monospace'],
-        ["'Courier New', monospace",    'Courier New'],
-        ["'JetBrains Mono', monospace", 'JetBrains Mono'],
-        ["'Arial', sans-serif",         'Arial'],
-        ["'Georgia', serif",            'Georgia'],
-        ["'Times New Roman', serif",    'Times New Roman'],
-        ['neogreekrunic', 'neogreekrunic'],
-        ['splitbitsv2', 'splitbitsv2'],
-    ],
-    matrixRainColor: [
-        ['red', 'Red'], ['green', 'Green'], ['blue', 'Blue'],
-        ['cyan', 'Cyan'], ['yellow', 'Yellow'], ['magenta', 'Magenta'],
-        ['black', 'Black'], ['white', 'White'],
-        ['greyNoise', 'Greyscale Noise'],
-        ['colorNoise', 'Color Noise'],
-        ['imagePaletteNoise',   'Image Palette Inside'],
-        ['imagePaletteRandom',  'Image Palette Noise'],
-    ],
-    shapeStickerShape: [['rectangle', 'Rectangle'], ['ellipse', 'Ellipse'], ['triangle', 'Triangle'], ['polygon', 'Polygon']],
-    shapeStickerFillType: [['solid', 'Solid Color'], ['static', 'Static'], ['image-grab', 'Image Grab']],
-    shapeStickerSolidColor: [['r', 'Red'], ['g', 'Green'], ['b', 'Blue'], ['c', 'Cyan'], ['y', 'Yellow'], ['m', 'Magenta'], ['black', 'Black'], ['white', 'White']],
-    shapeStickerStaticType: [['greyscale', 'Greyscale'], ['random-rgbcym', 'Random RGBYM'], ['image-color-static', 'Image Color Static']],
-    shapeStickerGrabMode: [['skew', 'Skew'], ['wrap', 'Wrap']],
-    basicFadeShape:   [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-    wavesFadeShape:   [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-    lineDragDir:       [['down', 'Down'], ['up', 'Up'], ['right', 'Right'], ['left', 'Left']],
-    lineDragTarget:    [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']],
-    lineDragFadeShape: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']],
-};
-
 // Build all parameter controls for one effect instance into a container div.
 export function buildEffectBody(inst, onRebuild) {
     const effect = getEffect(inst.effectName);
@@ -349,7 +105,7 @@ export function buildEffectBody(inst, onRebuild) {
 }
 
 function buildControl(inst, key, schema, onRebuild, labelOverride) {
-    const label = labelOverride ?? PARAM_LABELS[key] ?? key;
+    const label = labelOverride ?? schema.label ?? key;
     const currentVal = inst.params[key];
 
     // Action button — schema.button names the param to randomize when clicked
@@ -477,7 +233,7 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
     }
 
     // Enum → select
-    if (PARAM_OPTIONS[key]) {
+    if (schema.options) {
         const group = document.createElement('div');
         group.className = 'control-group';
         const row = document.createElement('div');
@@ -487,7 +243,7 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         labelEl.textContent = label;
         const select = document.createElement('select');
         select.dataset.instParam = key;
-        for (const [val, text] of PARAM_OPTIONS[key]) {
+        for (const [val, text] of schema.options) {
             const opt = document.createElement('option');
             opt.value = val;
             opt.textContent = text;

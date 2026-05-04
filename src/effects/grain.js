@@ -4,9 +4,9 @@ export default {
     pass: 'pre-crt',
     paramKeys: ['grainIntensity', 'grainSize'],
     params: {
-        grainEnabled:   { default: false },
-        grainIntensity: { default: 0, min: 0, max: 100 },
-        grainSize:      { default: 1, min: 1, max: 10 },
+        grainEnabled:   { default: false, label: 'Enable' },
+        grainIntensity: { default: 0, min: 0, max: 100, label: 'Intensity' },
+        grainSize:      { default: 1, min: 1, max: 10,  label: 'Grain Size' },
     },
     enabled: (p) => p.grainEnabled && p.grainIntensity > 0,
     glsl: `

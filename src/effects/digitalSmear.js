@@ -4,10 +4,10 @@ export default {
     pass:  'pre-crt',
     paramKeys: ['smearWidth', 'smearDirection', 'smearShift'],
     params: {
-        smearEnabled:   { default: false },
-        smearWidth:     { default: 15,  min: 5,  max: 50  },
-        smearDirection: { default: 'ltr' },
-        smearShift:     { default: 0,   min: 0,  max: 100 },
+        smearEnabled:   { default: false, label: 'Enable' },
+        smearWidth:     { default: 15,  min: 5,  max: 50,  label: 'Width' },
+        smearDirection: { default: 'ltr', label: 'Direction', options: [['ltr', 'Left → Right'], ['rtl', 'Right → Left'], ['ttb', 'Top → Bottom'], ['btu', 'Bottom → Top']] },
+        smearShift:     { default: 0,   min: 0,  max: 100, label: 'Shift' },
     },
     enabled:  (p) => p.smearEnabled && p.smearWidth > 0,
     bindUniforms: (gl, prog, p) => {

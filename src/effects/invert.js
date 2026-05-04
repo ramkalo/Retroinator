@@ -4,12 +4,21 @@ export default {
     pass: 'pre-crt',
     paramKeys: ['invertColorA', 'invertColorB', 'invertTarget', 'invertIntensity', 'invertReverse'],
     params: {
-        invertEnabled:   { default: false },
-        invertColorA:    { default: 'all' },
-        invertColorB:    { default: 'bk' },
-        invertTarget:    { default: 'lum' },
-        invertIntensity: { default: 0, min: 0, max: 100 },
-        invertReverse:   { default: false },
+        invertEnabled:   { default: false, label: 'Enable' },
+        invertColorA:    { default: 'all', label: 'Color A', options: [
+            ['all', 'All Colors'],
+            ['r',  'Red'], ['g',  'Green'], ['b',  'Blue'],
+            ['c',  'Cyan'], ['y',  'Yellow'], ['m',  'Magenta'],
+            ['w',  'White'], ['bk', 'Black'],
+        ] },
+        invertColorB:    { default: 'bk', label: 'Color B', options: [
+            ['r',  'Red'], ['g',  'Green'], ['b',  'Blue'],
+            ['c',  'Cyan'], ['y',  'Yellow'], ['m',  'Magenta'],
+            ['w',  'White'], ['bk', 'Black'],
+        ] },
+        invertTarget:    { default: 'lum', label: 'Target', options: [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']] },
+        invertIntensity: { default: 0, min: 0, max: 100, label: 'Threshold' },
+        invertReverse:   { default: false, label: 'Reverse Threshold' },
     },
     enabled: (p) => p.invertEnabled,
     bindUniforms: (gl, prog, params) => {

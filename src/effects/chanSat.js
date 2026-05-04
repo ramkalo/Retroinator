@@ -4,12 +4,12 @@ export default {
     pass:  'pre-crt',
     paramKeys: ['chanSatRed', 'chanSatGreen', 'chanSatBlue', 'chanSatThreshold', 'chanSatAmount'],
     params: {
-        chanSatEnabled:   { default: false },
-        chanSatRed:       { default: false },
-        chanSatGreen:     { default: false },
-        chanSatBlue:      { default: false },
-        chanSatThreshold: { default: 0,  min: 0,    max: 100 },
-        chanSatAmount:    { default: 100,   min: -100, max: 100  },
+        chanSatEnabled:   { default: false, label: 'Enable' },
+        chanSatRed:       { default: false, label: 'Red' },
+        chanSatGreen:     { default: false, label: 'Green' },
+        chanSatBlue:      { default: false, label: 'Blue' },
+        chanSatThreshold: { default: 0,  min: 0,    max: 100, label: 'Target Saturation' },
+        chanSatAmount:    { default: 100,   min: -100, max: 100, label: 'Saturation'  },
     },
     enabled:  (p) => p.chanSatEnabled,
     glsl: `

@@ -4,10 +4,10 @@ export default {
     pass: 'post',
     paramKeys: ['crtStatic', 'crtStaticType', 'crtStaticGrain'],
     params: {
-        crtStaticEnabled: { default: false },
-        crtStatic:        { default: 0, min: 0, max: 100 },
-        crtStaticType:    { default: 'white' },
-        crtStaticGrain:   { default: 1, min: 1, max: 200 },
+        crtStaticEnabled: { default: false, label: 'Enable' },
+        crtStatic:        { default: 0, min: 0, max: 100, label: 'Static' },
+        crtStaticType:    { default: 'white', label: 'Static Type', options: [['white', 'White'], ['grey', 'Greyscale'], ['color', 'Color'], ['luma', 'Luma'], ['image', 'Image']] },
+        crtStaticGrain:   { default: 1, min: 1, max: 200, label: 'Grain Size' },
     },
     enabled: (p) => p.crtStaticEnabled,
     bindUniforms: (gl, prog, params) => {

@@ -4,12 +4,12 @@ export default {
     pass: 'transform',
     paramKeys: ['rotate90', 'rotate180', 'rotate270', 'flipH', 'flipV'],
     params: {
-        transformEnabled: { default: false },
-        rotate90:         { default: false },
-        rotate180:        { default: false },
-        rotate270:        { default: false },
-        flipH:            { default: false },
-        flipV:            { default: false },
+        transformEnabled: { default: false, label: 'Enable' },
+        rotate90:         { default: false, label: '90°' },
+        rotate180:        { default: false, label: '180°' },
+        rotate270:        { default: false, label: '270°' },
+        flipH:            { default: false, label: 'Flip H' },
+        flipV:            { default: false, label: 'Flip V' },
     },
     enabled: (p) => p.transformEnabled && (p.rotate90 || p.rotate180 || p.rotate270 || p.flipH || p.flipV),
     // Rotations swap canvas dimensions; flips don't

@@ -4,11 +4,11 @@ export default {
     pass: 'pre-crt',
     paramKeys: ['pixelSize', 'pixelColors', 'digitizeDither', 'digitizeNoise'],
     params: {
-        digitizeEnabled: { default: false },
-        pixelSize:       { default: 1,  min: 1,  max: 32 },
-        pixelColors:     { default: 16, min: 2,  max: 64 },
-        digitizeDither:  { default: 0,  min: 0,  max: 100 },
-        digitizeNoise:   { default: 0,  min: 0,  max: 100 },
+        digitizeEnabled: { default: false, label: 'Enable' },
+        pixelSize:       { default: 1,  min: 1,  max: 32,  label: 'Pixel Size' },
+        pixelColors:     { default: 16, min: 2,  max: 64,  label: '# Colors' },
+        digitizeDither:  { default: 0,  min: 0,  max: 100, label: 'Dithering' },
+        digitizeNoise:   { default: 0,  min: 0,  max: 100, label: 'Noise' },
     },
     enabled: (p) => p.digitizeEnabled,
     glsl: `

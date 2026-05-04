@@ -28,7 +28,7 @@ import { shapeStickerEffect } from './shapeSticker.js';
  * @property {string} name
  * @property {string} label
  * @property {'transform'|'pre-crt'|'post'|'context'|'viewport'} pass
- * @property {Record<string, {default: *, min?: number, max?: number, step?: number}>} params
+ * @property {Record<string, {default: *, min?: number, max?: number, step?: number, label?: string, options?: [string, string][]}>} params
  * @property {(p: object) => boolean} enabled
  * @property {string[]} [paramKeys]       — param names auto-bound to GLSL uniforms
  * @property {string[]} [handleParams]    — param names driven by canvas drag handles
