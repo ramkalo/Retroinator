@@ -1,17 +1,20 @@
+import { buildFadeControl, buildThresholdControl } from './controls/index.js';
+
+const fade      = buildFadeControl('lineDrag', { fade: 20, w: 40, h: 40, invert: true });
+const threshold = buildThresholdControl('lineDrag');
+
 export default {
     name:  'lineDrag',
     label: 'Line Drag',
     pass:  'pre-crt',
 
-    handleParams: ['lineDragX', 'lineDragY', 'lineDragAngle', 'lineDragFadeX', 'lineDragFadeY',
-                   'lineDragFadeW', 'lineDragFadeH', 'lineDragFadeAngle'],
+    handleParams: ['lineDragX', 'lineDragY', 'lineDragAngle', ...fade.handleParams],
 
     paramKeys: [
         'lineDragX', 'lineDragY', 'lineDragAngle', 'lineDragDir',
-        'lineDragTarget', 'lineDragThreshold', 'lineDragThresholdReverse', 'lineDragThresholdOnDest',
-        'lineDragFadeEnabled', 'lineDragFadeShape', 'lineDragFade', 'lineDragFadeW',
-        'lineDragFadeH', 'lineDragFadeSlope', 'lineDragFadeInvert', 'lineDragFadeAngle',
-        'lineDragFadeX', 'lineDragFadeY',
+        'lineDragThresholdOnDest',
+        ...threshold.paramKeys,
+        ...fade.paramKeys,
     ],
 
     params: {
@@ -20,38 +23,25 @@ export default {
         lineDragY:                { default: 50, min: 0, max: 100, label: 'Y' },
         lineDragAngle:            { default: 0, min: -89, max: 89, step: 1, label: 'Angle' },
         lineDragDir:              { default: 'down', label: 'Direction', options: [['down', 'Down'], ['up', 'Up'], ['right', 'Right'], ['left', 'Left']] },
-        lineDragTarget:           { default: 'lum', label: 'Target', options: [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']] },
-        lineDragThreshold:        { default: 0, min: 0, max: 100, label: 'Threshold' },
-        lineDragThresholdReverse: { default: false, label: 'Reverse Threshold' },
         lineDragThresholdOnDest:  { default: false, label: 'On Destination' },
-        lineDragFadeEnabled:      { default: false, label: 'Enable Fade' },
-        lineDragFadeShape:        { default: 'ellipse', label: 'Shape', options: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']] },
-        lineDragFade:             { default: 20, min: 0, max: 100, label: 'Fade' },
-        lineDragFadeW:            { default: 40, min: 1, max: 200, label: 'Width' },
-        lineDragFadeH:            { default: 40, min: 1, max: 200, label: 'Height' },
-        lineDragFadeSlope:        { default: 3, min: 0.1, max: 8, step: 0.1, label: 'Transition Slope' },
-        lineDragFadeInvert:       { default: true, label: 'Invert Fade' },
-        lineDragFadeAngle:        { default: 0, min: -180, max: 180 },
-        lineDragFadeX:            { default: 0, min: -50, max: 50, label: 'Center X' },
-        lineDragFadeY:            { default: 0, min: -50, max: 50, label: 'Center Y' },
+        ...threshold.params,
+        ...fade.params,
     },
 
     uiGroups: [
         { keys: ['lineDragEnabled', 'lineDragAngle', 'lineDragDir'] },
-        { label: 'Threshold', keys: ['lineDragTarget', 'lineDragThreshold',
-                                      'lineDragThresholdReverse', 'lineDragThresholdOnDest'] },
-        { label: 'Fade', keys: ['lineDragFadeEnabled', 'lineDragFadeShape', 'lineDragFade',
-                                 'lineDragFadeSlope', 'lineDragFadeInvert'] },
+        { label: 'Threshold', keys: ['lineDragThresholdOnDest', ...threshold.uiGroup.keys] },
+        fade.uiGroup,
     ],
 
     enabled: (p) => p.lineDragEnabled,
 
     bindUniforms: (gl, prog, p) => {
-        const s = prog._locs;
+        const s  = prog._locs;
         const si = (k, v) => { if (s[k] != null) gl.uniform1i(s[k], v); };
-        si('lineDragDir',       { down: 0, up: 1, right: 2, left: 3 }[p.lineDragDir] ?? 0);
-        si('lineDragTarget',    { lum: 0, r: 1, g: 2, b: 3 }[p.lineDragTarget] ?? 0);
-        si('lineDragFadeShape', { ellipse: 0, rectangle: 1 }[p.lineDragFadeShape] ?? 0);
+        si('lineDragDir', { down: 0, up: 1, right: 2, left: 3 }[p.lineDragDir] ?? 0);
+        fade.bindUniforms(gl, prog, p);
+        threshold.bindUniforms(gl, prog, p);
     },
 
     glsl: `
@@ -59,23 +49,9 @@ uniform float lineDragX;
 uniform float lineDragY;
 uniform float lineDragAngle;
 uniform int   lineDragDir;
-
-uniform int   lineDragTarget;
-uniform float lineDragThreshold;
-uniform int   lineDragThresholdReverse;
 uniform int   lineDragThresholdOnDest;
-
-uniform int   lineDragFadeEnabled;
-uniform int   lineDragFadeShape;
-uniform float lineDragFadeX;
-uniform float lineDragFadeY;
-uniform float lineDragFade;
-uniform float lineDragFadeW;
-uniform float lineDragFadeH;
-uniform float lineDragFadeSlope;
-uniform int   lineDragFadeInvert;
-uniform float lineDragFadeAngle;
-
+${threshold.glsl}
+${fade.glsl}
 void main() {
     vec2 uv = vUV;
 
@@ -109,44 +85,12 @@ void main() {
     vec4 sampledColor = texture(uTex, sampleUV);
 
     // Step 4: threshold check
-    float thresh = lineDragThreshold / 100.0;
-    vec4  checkColor = (lineDragThresholdOnDest == 1) ? origColor : sampledColor;
-    float cr = checkColor.r, cg = checkColor.g, cb = checkColor.b;
-    float lum = 0.299 * cr + 0.587 * cg + 0.114 * cb;
-    float targetVal = (lineDragTarget == 1) ? cr
-                    : (lineDragTarget == 2) ? cg
-                    : (lineDragTarget == 3) ? cb
-                    : lum;
-    bool passThreshold = (lineDragThresholdReverse == 1) ? (targetVal <= thresh) : (targetVal >= thresh);
+    vec4 checkColor = (lineDragThresholdOnDest == 1) ? origColor : sampledColor;
+    bool passThreshold = ${threshold.fnName}(checkColor);
     vec4 effectColor = (inDragRegion && passThreshold) ? sampledColor : origColor;
 
     // Step 5: fade weight
-    float weight = 1.0;
-    if (lineDragFadeEnabled == 1) {
-        float imgX = vUV.x * uResolution.x;
-        float imgY = (1.0 - vUV.y) * uResolution.y;
-        float fcx  = (0.5 + lineDragFadeX / 100.0) * uResolution.x;
-        float fcy  = (0.5 - lineDragFadeY / 100.0) * uResolution.y;
-        float dx   = imgX - fcx;
-        float dy   = imgY - fcy;
-        float rad  = lineDragFadeAngle * 3.14159265 / 180.0;
-        float cosA = cos(rad), sinA = sin(rad);
-        float rdx  =  dx * cosA + dy * sinA;
-        float rdy  = -dx * sinA + dy * cosA;
-        float hw   = max(1.0, (lineDragFadeW / 100.0) * uResolution.x / 2.0);
-        float hh   = max(1.0, (lineDragFadeH / 100.0) * uResolution.y / 2.0);
-        float t;
-        if (lineDragFadeShape == 0) {
-            t = sqrt(pow(rdx / hw, 2.0) + pow(rdy / hh, 2.0));
-        } else {
-            t = max(abs(rdx) / hw, abs(rdy) / hh);
-        }
-        float beyond  = max(0.0, t - 1.0);
-        float fadeAmt = lineDragFade / 100.0;
-        weight = (lineDragFadeInvert == 1)
-            ? clamp(beyond * lineDragFadeSlope * fadeAmt, 0.0, 1.0)
-            : clamp(1.0 - beyond * lineDragFadeSlope * fadeAmt, 0.0, 1.0);
-    }
+    float weight = ${fade.fnName}();
 
     // Step 6: output
     fragColor = mix(origColor, effectColor, weight);

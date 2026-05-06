@@ -1,4 +1,7 @@
 import { secondTexture } from '../renderer/glstate.js';
+import { buildFadeControl } from './controls/index.js';
+
+const fade = buildFadeControl('doubleExposure', { fade: 20, w: 40, h: 40, invert: true });
 
 export default {
     name: 'doubleExposure',
@@ -9,18 +12,17 @@ export default {
         'doubleExposureOrigOpacity', 'doubleExposureOpacity',
         'doubleExposureIntensity', 'doubleExposureReverseLum',
         'doubleExposureThreshSat', 'doubleExposureReverseSat',
-        'doubleExposureFadeEnabled', 'doubleExposureFadeShape',
-        'doubleExposureFade', 'doubleExposureFadeSlope', 'doubleExposureFadeInvert',
+        'doubleExposureTexX', 'doubleExposureTexY',
+        ...fade.paramKeys,
     ],
     handleParams: [
         'doubleExposureTexX', 'doubleExposureTexY',
-        'doubleExposureFadeX', 'doubleExposureFadeY',
-        'doubleExposureFadeW', 'doubleExposureFadeH', 'doubleExposureFadeAngle',
+        ...fade.handleParams,
     ],
     uiGroups: [
         { keys: ['doubleExposureBlendMode', 'doubleExposureOrigOpacity', 'doubleExposureOpacity'] },
         { label: 'Threshold', keys: ['doubleExposureChannelMode', 'doubleExposureIntensity', 'doubleExposureReverseLum', 'doubleExposureThreshSat', 'doubleExposureReverseSat'] },
-        { label: 'Fade', keys: ['doubleExposureFadeEnabled', 'doubleExposureFadeShape', 'doubleExposureFade', 'doubleExposureFadeSlope', 'doubleExposureFadeInvert'] },
+        fade.uiGroup,
     ],
     params: {
         doubleExposureEnabled:     { default: false, label: 'Enable' },
@@ -32,49 +34,18 @@ export default {
         doubleExposureReverseLum:  { default: false, label: 'Reverse' },
         doubleExposureThreshSat:   { default: 0, min: 0, max: 100, label: 'Saturation' },
         doubleExposureReverseSat:  { default: false, label: 'Reverse' },
-        doubleExposureFadeEnabled: { default: false, label: 'Enable Fade' },
-        doubleExposureFadeShape:   { default: 'ellipse', label: 'Shape', options: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']] },
-        doubleExposureFade:        { default: 20, min: 0, max: 100, label: 'Strength' },
-        doubleExposureFadeW:       { default: 40, min: 1, max: 200, label: 'Width' },
-        doubleExposureFadeH:       { default: 40, min: 1, max: 200, label: 'Height' },
-        doubleExposureFadeSlope:   { default: 3, min: 0.1, max: 8, step: 0.1, label: 'Transition' },
-        doubleExposureFadeInvert:  { default: true, label: 'Invert' },
-        doubleExposureFadeAngle:   { default: 0, min: -180, max: 180, label: 'Angle' },
-        doubleExposureFadeX:       { default: 0, min: -50, max: 50, label: 'Center X' },
-        doubleExposureFadeY:       { default: 0, min: -50, max: 50, label: 'Center Y' },
         doubleExposureTexX:        { default: 0, min: -100, max: 100, label: 'Image X' },
         doubleExposureTexY:        { default: 0, min: -100, max: 100, label: 'Image Y' },
+        ...fade.params,
     },
     enabled: (p) => p.doubleExposureEnabled && !!secondTexture,
     bindUniforms: (gl, prog, p) => {
         const chanMap  = { all: 7, r: 1, g: 2, b: 4 };
         const blendMap = { normal: 0, screen: 1, multiply: 2, add: 3, overlay: 4, difference: 5 };
-        const shapeMap = { ellipse: 0, rectangle: 1 };
-
         const set1i = (name, val) => { const loc = prog._locs[name]; if (loc != null) gl.uniform1i(loc, val); };
-        const set1f = (name, val) => { const loc = prog._locs[name]; if (loc != null) gl.uniform1f(loc, val); };
 
         set1i('doubleExposureChannelMode', chanMap[p.doubleExposureChannelMode] ?? 7);
         set1i('doubleExposureBlendMode',   blendMap[p.doubleExposureBlendMode]  ?? 1);
-        set1i('doubleExposureReverseLum',  p.doubleExposureReverseLum  ? 1 : 0);
-        set1i('doubleExposureReverseSat',  p.doubleExposureReverseSat  ? 1 : 0);
-        set1i('doubleExposureFadeEnabled', p.doubleExposureFadeEnabled ? 1 : 0);
-        set1i('doubleExposureFadeShape',   shapeMap[p.doubleExposureFadeShape]  ?? 0);
-        set1i('doubleExposureFadeInvert',  p.doubleExposureFadeInvert  ? 1 : 0);
-
-        set1f('doubleExposureOrigOpacity', p.doubleExposureOrigOpacity);
-        set1f('doubleExposureOpacity',     p.doubleExposureOpacity);
-        set1f('doubleExposureIntensity',   p.doubleExposureIntensity);
-        set1f('doubleExposureThreshSat',   p.doubleExposureThreshSat);
-        set1f('doubleExposureFade',        p.doubleExposureFade);
-        set1f('doubleExposureFadeW',       p.doubleExposureFadeW);
-        set1f('doubleExposureFadeH',       p.doubleExposureFadeH);
-        set1f('doubleExposureFadeSlope',   p.doubleExposureFadeSlope);
-        set1f('doubleExposureFadeAngle',   p.doubleExposureFadeAngle);
-        set1f('doubleExposureFadeX',       p.doubleExposureFadeX);
-        set1f('doubleExposureFadeY',       p.doubleExposureFadeY);
-        set1f('doubleExposureTexX',        p.doubleExposureTexX);
-        set1f('doubleExposureTexY',        p.doubleExposureTexY);
 
         const texLoc = prog._locs['uSecondTex'];
         if (texLoc != null && secondTexture) {
@@ -82,6 +53,8 @@ export default {
             gl.bindTexture(gl.TEXTURE_2D, secondTexture);
             gl.uniform1i(texLoc, 1);
         }
+
+        fade.bindUniforms(gl, prog, p);
     },
     glsl: `
 uniform sampler2D uSecondTex;
@@ -93,19 +66,9 @@ uniform float doubleExposureIntensity;
 uniform int   doubleExposureReverseLum;
 uniform float doubleExposureThreshSat;
 uniform int   doubleExposureReverseSat;
-uniform int   doubleExposureFadeEnabled;
-uniform int   doubleExposureFadeShape;
-uniform float doubleExposureFade;
-uniform float doubleExposureFadeW;
-uniform float doubleExposureFadeH;
-uniform float doubleExposureFadeSlope;
-uniform int   doubleExposureFadeInvert;
-uniform float doubleExposureFadeAngle;
-uniform float doubleExposureFadeX;
-uniform float doubleExposureFadeY;
 uniform float doubleExposureTexX;
 uniform float doubleExposureTexY;
-
+${fade.glsl}
 float blendCh(float a, float b) {
     if      (doubleExposureBlendMode == 1) return 1.0 - (1.0-a)*(1.0-b);
     else if (doubleExposureBlendMode == 2) return a * b;
@@ -161,29 +124,7 @@ void main() {
 
     result = mix(base, result, doubleExposureOpacity / 100.0);
 
-    float weight = 1.0;
-    if (doubleExposureFadeEnabled == 1 && doubleExposureFade > 0.0) {
-        float imgX = vUV.x * uResolution.x;
-        float imgY = (1.0 - vUV.y) * uResolution.y;
-        float cx = (0.5 + doubleExposureFadeX / 100.0) * uResolution.x;
-        float cy = (0.5 - doubleExposureFadeY / 100.0) * uResolution.y;
-        float dx = imgX - cx;
-        float dy = imgY - cy;
-        float rad = doubleExposureFadeAngle * 3.14159265 / 180.0;
-        float cosA = cos(rad), sinA = sin(rad);
-        float rdx = dx * cosA + dy * sinA;
-        float rdy = -dx * sinA + dy * cosA;
-        float hw = max(1.0, (doubleExposureFadeW / 100.0) * uResolution.x / 2.0);
-        float hh = max(1.0, (doubleExposureFadeH / 100.0) * uResolution.y / 2.0);
-        float t = (doubleExposureFadeShape == 0)
-            ? sqrt(pow(rdx / hw, 2.0) + pow(rdy / hh, 2.0))
-            : max(abs(rdx) / hw, abs(rdy) / hh);
-        float beyond = max(0.0, t - 1.0);
-        float fadeAmt = doubleExposureFade / 100.0;
-        weight = (doubleExposureFadeInvert == 1)
-            ? clamp(beyond * doubleExposureFadeSlope * fadeAmt, 0.0, 1.0)
-            : clamp(1.0 - beyond * doubleExposureFadeSlope * fadeAmt, 0.0, 1.0);
-    }
+    float weight = ${fade.fnName}();
 
     // Fade masks back to original (unscaled), not base
     result = mix(orig.rgb, result, weight);

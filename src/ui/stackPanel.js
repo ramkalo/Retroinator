@@ -202,43 +202,48 @@ export function renderStackList() {
     // _activate() which overwrites _mode, making the hide guards fire too late.
     const expandedInst = stack.find(i => i.id === _expandedId);
     const newEffect = expandedInst?.effectName;
+    const effect = expandedInst ? getEffect(newEffect) : null;
 
-    if (newEffect !== 'text')       hideTextOverlay();
-    if (newEffect !== 'fade')       hideFadeOverlay();
-    if (newEffect !== 'blur')       hideBlurOverlay();
-    if (newEffect !== 'crop')       hideCropOverlay();
-    if (newEffect !== 'viewport')   hideViewportOverlay();
-    if (newEffect !== 'matrixRain') hideMatrixRainOverlay();
-    if (newEffect !== 'lineDrag')   hideLineDragOverlay();
-    if (newEffect !== 'chroma')     hideChromaOverlay();
-    if (newEffect !== 'vignette')   hideVignetteOverlay();
+    // Resolve overlays descriptor — effects declare { fade, chroma, ... } or a function returning same
+    const overlays = expandedInst && effect?.overlays
+        ? (typeof effect.overlays === 'function' ? effect.overlays(expandedInst) : effect.overlays)
+        : {};
+
+    // Always hide before showing — order matters (see comment above)
+    hideTextOverlay();
+    hideFadeOverlay();
+    hideBlurOverlay();
+    if (newEffect !== 'crop')         hideCropOverlay();
+    if (newEffect !== 'viewport')     hideViewportOverlay();
+    if (newEffect !== 'matrixRain')   hideMatrixRainOverlay();
+    if (newEffect !== 'lineDrag')     hideLineDragOverlay();
+    if (!overlays.chroma)             hideChromaOverlay();
+    if (newEffect !== 'vignette')     hideVignetteOverlay();
     if (newEffect !== 'crtCurvature') hideCRTCurvatureOverlay();
-    if (newEffect !== 'corrupted')     hideCorruptedOverlay();
+    if (newEffect !== 'corrupted')    hideCorruptedOverlay();
     if (newEffect !== 'doubleExposure') hideDoubleExposureOverlay();
     if (newEffect !== 'shapeSticker') hideShapeStickerOverlay();
 
-    if      (newEffect === 'text')     showTextOverlay(expandedInst);
-    else if (newEffect === 'basic')    showFadeOverlay(expandedInst);
-    else if (newEffect === 'blur')     showBlurOverlay(expandedInst);
-    else if (newEffect === 'crop')     showCropOverlay(expandedInst);
-    else if (newEffect === 'viewport')    showViewportOverlay(expandedInst);
-    else if (newEffect === 'matrixRain') showMatrixRainOverlay(expandedInst);
-    else if (newEffect === 'lineDrag') showLineDragOverlay(expandedInst);
-    else if (newEffect === 'chroma') {
-        if (expandedInst.params.chromaMode === 'outline')
-            showChromaOverlay(expandedInst);
-        else {
-            hideChromaOverlay();
-            showFadeOverlay(expandedInst, 'chromaFadeX', 'chromaFadeY', 'chromaFadeShape', 'chromaFadeW', 'chromaFadeH', 'chromaFadeAngle', 'chromaFadeEnabled');
-        }
+    if (!expandedInst) return;
+
+    // Data-driven fade overlay — any effect with overlays.fade uses showFadeOverlay
+    if (overlays.fade) {
+        const o = overlays.fade;
+        showFadeOverlay(expandedInst, o.xKey, o.yKey, o.shapeKey, o.wKey, o.hKey, o.angleKey, o.enabledKey);
     }
-    else if (newEffect === 'glow')
-        showFadeOverlay(expandedInst, 'glowFadeX', 'glowFadeY', 'glowFadeShape', 'glowFadeW', 'glowFadeH', 'glowFadeAngle', 'glowFadeEnabled');
-    else if (newEffect === 'doubleExposure')
-        showDoubleExposureOverlay(expandedInst);
-    else if (newEffect === 'vignette')  showVignetteOverlay(expandedInst);
+    if (overlays.chroma)               showChromaOverlay(expandedInst);
+
+    // Effect-specific overlays that have unique logic or modes
+    if      (newEffect === 'text')         showTextOverlay(expandedInst);
+    else if (newEffect === 'blur')         showBlurOverlay(expandedInst);
+    else if (newEffect === 'crop')         showCropOverlay(expandedInst);
+    else if (newEffect === 'viewport')     showViewportOverlay(expandedInst);
+    else if (newEffect === 'matrixRain')   showMatrixRainOverlay(expandedInst);
+    else if (newEffect === 'lineDrag')     showLineDragOverlay(expandedInst);
+    else if (newEffect === 'doubleExposure') showDoubleExposureOverlay(expandedInst);
+    else if (newEffect === 'vignette')     showVignetteOverlay(expandedInst);
     else if (newEffect === 'crtCurvature') showCRTCurvatureOverlay(expandedInst);
-    else if (newEffect === 'corrupted') showCorruptedOverlay(expandedInst);
+    else if (newEffect === 'corrupted')    showCorruptedOverlay(expandedInst);
     else if (newEffect === 'shapeSticker') showShapeStickerOverlay(expandedInst);
 }
 

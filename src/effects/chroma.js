@@ -1,42 +1,41 @@
+import { buildFadeControl, buildThresholdControl } from './controls/index.js';
+
+const fade      = buildFadeControl('chroma', { fade: 0, w: 100, h: 100, invert: false });
+const threshold = buildThresholdControl('chroma');
+
 export default {
     name: 'chroma',
     label: 'Chromatic Aberration',
     pass: 'pre-crt',
-    paramKeys: ['chromaRedX', 'chromaRedY', 'chromaGreenX', 'chromaGreenY', 'chromaBlueX', 'chromaBlueY', 'chromaScale', 'chromaThreshold', 'chromaThresholdTarget', 'chromaThresholdReverse', 'chromaFadeEnabled', 'chromaFade', 'chromaFadeSlope', 'chromaFadeInvert', 'chromaFadeX', 'chromaFadeY', 'chromaFadeW', 'chromaFadeH', 'chromaFadeAngle', 'chromaOutlineX', 'chromaOutlineY',
-                'wavesPhase'],
-    handleParams: ['chromaOutlineX', 'chromaOutlineY', 'chromaFadeX', 'chromaFadeY', 'chromaFadeW', 'chromaFadeH', 'chromaFadeAngle'],
+    paramKeys: [
+        'chromaRedX', 'chromaRedY', 'chromaGreenX', 'chromaGreenY', 'chromaBlueX', 'chromaBlueY',
+        'chromaScale', 'wavesPhase',
+        ...threshold.paramKeys,
+        ...fade.paramKeys,
+        'chromaOutlineX', 'chromaOutlineY',
+    ],
+    handleParams: ['chromaOutlineX', 'chromaOutlineY', ...fade.handleParams],
     params: {
-        chromaEnabled:   { default: false, label: 'Enable' },
-        chromaMode:      { default: 'classic', label: 'Mode', options: [['classic', 'Linear'], ['outline', 'Radial'], ['waves', 'Waves']] },
-        chromaRedX:      { default: 0, min: -20, max: 20, label: 'Red X' },
-        chromaRedY:      { default: 0, min: -20, max: 20, label: 'Red Y' },
-        chromaGreenX:    { default: 0, min: -20, max: 20, label: 'Green X' },
-        chromaGreenY:    { default: 0, min: -20, max: 20, label: 'Green Y' },
-        chromaBlueX:     { default: 0, min: -20, max: 20, label: 'Blue X' },
-        chromaBlueY:     { default: 0, min: -20, max: 20, label: 'Blue Y' },
-        chromaScale:            { default: 1,   min: 1,   max: 10, label: 'Scale' },
-        chromaThreshold:        { default: 0,   min: 0,   max: 100, label: 'Threshold' },
-        chromaThresholdTarget:  { default: 'lum', label: 'Target', options: [['lum', 'Luminance'], ['r', 'Red'], ['g', 'Green'], ['b', 'Blue']] },
-        chromaThresholdReverse: { default: false, label: 'Reverse Threshold' },
-        chromaFadeEnabled:      { default: false, label: 'Enable Fade' },
-        chromaFadeShape:        { default: 'ellipse', label: 'Shape', options: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']] },
-        chromaFade:             { default: 0,   min: 0,   max: 100, label: 'Fade' },
-        chromaFadeSlope:        { default: 3,   min: 0.1, max: 8, step: 0.1, label: 'Transition Slope' },
-        chromaFadeInvert:       { default: false, label: 'Invert Fade' },
-        chromaFadeX:            { default: 0,   min: -50, max: 50 },
-        chromaFadeY:            { default: 0,   min: -50, max: 50 },
-        chromaFadeW:            { default: 100, min: 1,   max: 200 },
-        chromaFadeH:            { default: 100, min: 1,   max: 200 },
-        chromaFadeAngle:        { default: 0,   min: -180, max: 180 },
-        chromaOutlineX:         { default: 0,   min: -50, max: 50 },
-        chromaOutlineY:         { default: 0,   min: -50, max: 50 },
-        wavesPhase:             { default: 0,   min: 0,   max: 100, label: 'Phase' },
+        chromaEnabled:  { default: false, label: 'Enable' },
+        chromaMode:     { default: 'classic', label: 'Mode', options: [['classic', 'Linear'], ['outline', 'Radial'], ['waves', 'Waves']] },
+        chromaRedX:     { default: 0, min: -20, max: 20, label: 'Red X' },
+        chromaRedY:     { default: 0, min: -20, max: 20, label: 'Red Y' },
+        chromaGreenX:   { default: 0, min: -20, max: 20, label: 'Green X' },
+        chromaGreenY:   { default: 0, min: -20, max: 20, label: 'Green Y' },
+        chromaBlueX:    { default: 0, min: -20, max: 20, label: 'Blue X' },
+        chromaBlueY:    { default: 0, min: -20, max: 20, label: 'Blue Y' },
+        chromaScale:    { default: 1,   min: 1,   max: 10, label: 'Scale' },
+        wavesPhase:     { default: 0,   min: 0,   max: 100, label: 'Phase' },
+        ...threshold.params,
+        ...fade.params,
+        chromaOutlineX: { default: 0, min: -50, max: 50 },
+        chromaOutlineY: { default: 0, min: -50, max: 50 },
     },
     enabled: (p) => p.chromaEnabled,
     uiGroups: (p) => {
         const sharedBottom = [
-            { label: 'Scale & Threshold', keys: ['chromaScale', 'chromaThreshold', 'chromaThresholdTarget', 'chromaThresholdReverse'] },
-            { label: 'Fade', keys: ['chromaFadeEnabled', 'chromaFadeShape', 'chromaFade', 'chromaFadeSlope', 'chromaFadeInvert'] },
+            { label: 'Scale & Threshold', keys: ['chromaScale', ...threshold.uiGroup.keys] },
+            fade.uiGroup,
         ];
         if (p.chromaMode === 'waves') return [
             { keys: ['chromaMode'] },
@@ -54,37 +53,26 @@ export default {
             ...sharedBottom,
         ];
     },
+    overlays: (inst) => inst.params.chromaMode === 'outline'
+        ? { chroma: true }
+        : { fade: fade.overlay },
     bindUniforms(gl, prog, p) {
-        const modeInt   = { classic: 0, outline: 1, waves: 2 }[p.chromaMode] ?? 0;
-        const shapeInt  = p.chromaFadeShape === 'rectangle' ? 1 : 0;
-        const targetInt = { lum: 0, r: 1, g: 2, b: 3 }[p.chromaThresholdTarget] ?? 0;
-        if (prog._locs['chromaMode']            != null) gl.uniform1i(prog._locs['chromaMode'],            modeInt);
-        if (prog._locs['chromaFadeShape']        != null) gl.uniform1i(prog._locs['chromaFadeShape'],        shapeInt);
-        if (prog._locs['chromaThresholdTarget']  != null) gl.uniform1i(prog._locs['chromaThresholdTarget'],  targetInt);
+        const modeInt = { classic: 0, outline: 1, waves: 2 }[p.chromaMode] ?? 0;
+        if (prog._locs['chromaMode'] != null) gl.uniform1i(prog._locs['chromaMode'], modeInt);
+        fade.bindUniforms(gl, prog, p);
+        threshold.bindUniforms(gl, prog, p);
     },
     glsl: `
 uniform float chromaRedX; uniform float chromaRedY;
 uniform float chromaGreenX; uniform float chromaGreenY;
 uniform float chromaBlueX; uniform float chromaBlueY;
 uniform float chromaScale;
-uniform float chromaThreshold;
-uniform int   chromaThresholdTarget;
-uniform int   chromaThresholdReverse;
-uniform int   chromaFadeEnabled;
-uniform float chromaFade;
-uniform float chromaFadeSlope;
-uniform int   chromaFadeInvert;
-uniform float chromaFadeX;
-uniform float chromaFadeY;
-uniform float chromaFadeW;
-uniform float chromaFadeH;
-uniform float chromaFadeAngle;
-uniform int   chromaFadeShape;
 uniform int   chromaMode;
 uniform float chromaOutlineX;
 uniform float chromaOutlineY;
 uniform float wavesPhase;
-
+${threshold.glsl}
+${fade.glsl}
 vec4 chromaSample(vec2 offsetPx) {
     return texture(uTex, clamp(vUV + vec2(-offsetPx.x, -offsetPx.y) / uResolution, vec2(0.0), vec2(1.0)));
 }
@@ -101,42 +89,9 @@ float wavesFormula(float xN, float yN) {
 void main() {
     vec4 orig = texture(uTex, vUV);
 
-    // Threshold check (target channel selectable)
-    float targetVal;
-    if      (chromaThresholdTarget == 1) targetVal = orig.r * 255.0;
-    else if (chromaThresholdTarget == 2) targetVal = orig.g * 255.0;
-    else if (chromaThresholdTarget == 3) targetVal = orig.b * 255.0;
-    else                                 targetVal = dot(orig.rgb, vec3(0.299, 0.587, 0.114)) * 255.0;
-    float thresh = 255.0 * (chromaThreshold / 100.0);
-    bool applyChroma = (chromaThresholdReverse == 1) ? (targetVal <= thresh) : (targetVal >= thresh);
-    if (!applyChroma) { fragColor = orig; return; }
+    if (!${threshold.fnName}(orig)) { fragColor = orig; return; }
 
-    // Ellipse / rectangle fade weight
-    float weight = 1.0;
-    if (chromaFadeEnabled == 1 && chromaFade > 0.0) {
-        float imgX = vUV.x * uResolution.x;
-        float imgY = (1.0 - vUV.y) * uResolution.y;
-        float cx = (0.5 + chromaFadeX / 100.0) * uResolution.x;
-        float cy = (0.5 - chromaFadeY / 100.0) * uResolution.y;
-        float dx = imgX - cx, dy = imgY - cy;
-        float ang = chromaFadeAngle * 3.14159265 / 180.0;
-        float cosA = cos(ang), sinA = sin(ang);
-        float rdx =  dx * cosA + dy * sinA;
-        float rdy = -dx * sinA + dy * cosA;
-        float hw = max(1.0, (chromaFadeW / 100.0) * uResolution.x / 2.0);
-        float hh = max(1.0, (chromaFadeH / 100.0) * uResolution.y / 2.0);
-        float t;
-        if (chromaFadeShape == 0) {
-            t = sqrt(pow(rdx / hw, 2.0) + pow(rdy / hh, 2.0));
-        } else {
-            t = max(abs(rdx) / hw, abs(rdy) / hh);
-        }
-        float beyond = max(0.0, t - 1.0);
-        float fadeAmt = chromaFade / 100.0;
-        weight = (chromaFadeInvert == 1)
-            ? clamp(beyond * chromaFadeSlope * fadeAmt, 0.0, 1.0)
-            : clamp(1.0 - beyond * chromaFadeSlope * fadeAmt, 0.0, 1.0);
-    }
+    float weight = ${fade.fnName}();
 
     float r, g, b;
 

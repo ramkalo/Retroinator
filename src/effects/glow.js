@@ -1,3 +1,7 @@
+import { buildFadeControl } from './controls/index.js';
+
+const fade = buildFadeControl('glow', { fade: 0, w: 50, h: 50, invert: false });
+
 const GLOW_THRESHOLD_GLSL = `
 uniform float glowThreshold;
 
@@ -54,46 +58,12 @@ void main() {
 const GLOW_COMPOSITE_GLSL = `
 uniform sampler2D uTexOriginal;
 uniform float glowIntensity;
-uniform float glowFade;
-uniform float glowFadeX;
-uniform float glowFadeY;
-uniform float glowFadeW;
-uniform float glowFadeH;
-uniform float glowFadeAngle;
-uniform float glowFadeSlope;
-uniform int   glowFadeEnabled;
-uniform int   glowFadeShape;
-uniform int   glowFadeInvert;
-
+${fade.glsl}
 void main() {
     vec4 orig    = texture(uTexOriginal, vUV);
     vec4 blurred = texture(uTex, vUV);
 
-    float weight = 1.0;
-    if (glowFadeEnabled == 1 && glowFade > 0.0) {
-        float imgX = vUV.x * uResolution.x;
-        float imgY = (1.0 - vUV.y) * uResolution.y;
-        float cx = (0.5 + glowFadeX / 100.0) * uResolution.x;
-        float cy = (0.5 - glowFadeY / 100.0) * uResolution.y;
-        float dx = imgX - cx, dy = imgY - cy;
-        float rad = glowFadeAngle * 3.14159265 / 180.0;
-        float cosA = cos(rad), sinA = sin(rad);
-        float rdx =  dx * cosA + dy * sinA;
-        float rdy = -dx * sinA + dy * cosA;
-        float hw = max(1.0, (glowFadeW / 100.0) * uResolution.x / 2.0);
-        float hh = max(1.0, (glowFadeH / 100.0) * uResolution.y / 2.0);
-        float t;
-        if (glowFadeShape == 0) {
-            t = sqrt(pow(rdx/hw, 2.0) + pow(rdy/hh, 2.0));
-        } else {
-            t = max(abs(rdx)/hw, abs(rdy)/hh);
-        }
-        float beyond = max(0.0, t - 1.0);
-        float fadeAmt = glowFade / 100.0;
-        weight = (glowFadeInvert == 1)
-            ? clamp(beyond * glowFadeSlope * fadeAmt, 0.0, 1.0)
-            : clamp(1.0 - beyond * glowFadeSlope * fadeAmt, 0.0, 1.0);
-    }
+    float weight = ${fade.fnName}();
 
     float intensity = glowIntensity / 100.0;
     vec3 glow = blurred.rgb * intensity * weight;
@@ -108,39 +78,23 @@ export default {
     pass: 'pre-crt',
     paramKeys: [
         'glowThreshold', 'glowRadius', 'glowIntensity',
-        'glowFade', 'glowFadeEnabled', 'glowFadeShape', 'glowFadeSlope', 'glowFadeInvert',
-        'glowFadeAngle', 'glowFadeW', 'glowFadeH', 'glowFadeX', 'glowFadeY',
+        ...fade.paramKeys,
     ],
-    handleParams: ['glowFadeX', 'glowFadeY', 'glowFadeW', 'glowFadeH', 'glowFadeAngle'],
+    handleParams: [...fade.handleParams],
     params: {
-        glowEnabled:    { default: false, label: 'Enable' },
-        glowIntensity:  { default: 80,  min: 0,    max: 300, label: 'Intensity' },
-        glowRadius:     { default: 60,  min: 1,    max: 60,  label: 'Radius' },
-        glowThreshold:  { default: 0,   min: 0,    max: 255, label: 'Threshold' },
-        glowFade:       { default: 0,   min: 0,    max: 100, label: 'Fade' },
-        glowFadeEnabled:{ default: false, label: 'Enable Fade' },
-        glowFadeShape:  { default: 'ellipse', label: 'Shape', options: [['ellipse', 'Ellipse'], ['rectangle', 'Rectangle']] },
-        glowFadeSlope:  { default: 3,   min: 0.1,  max: 8,   label: 'Transition Slope' },
-        glowFadeInvert: { default: false, label: 'Invert Fade' },
-        glowFadeAngle:  { default: 0,   min: -180, max: 180, label: 'Angle' },
-        glowFadeW:      { default: 50,  min: 1,    max: 200, label: 'Width' },
-        glowFadeH:      { default: 50,  min: 1,    max: 200, label: 'Height' },
-        glowFadeX:      { default: 0,   min: -50,  max: 50,  label: 'X' },
-        glowFadeY:      { default: 0,   min: -50,  max: 50,  label: 'Y' },
+        glowEnabled:   { default: false, label: 'Enable' },
+        glowIntensity: { default: 80,  min: 0,   max: 300, label: 'Intensity' },
+        glowRadius:    { default: 60,  min: 1,   max: 60,  label: 'Radius' },
+        glowThreshold: { default: 0,   min: 0,   max: 255, label: 'Threshold' },
+        ...fade.params,
     },
     enabled: (p) => p.glowEnabled,
     uiGroups: [
         { keys: ['glowThreshold', 'glowRadius', 'glowIntensity'] },
-        { label: 'Fade', keys: ['glowFadeEnabled', 'glowFadeShape', 'glowFade', 'glowFadeSlope', 'glowFadeInvert'] },
+        fade.uiGroup,
     ],
-    bindUniforms: (gl, prog, p) => {
-        const sl = prog._locs['glowFadeShape'];
-        if (sl != null) gl.uniform1i(sl, { ellipse: 0, rectangle: 1 }[p.glowFadeShape] ?? 0);
-        const el = prog._locs['glowFadeEnabled'];
-        if (el != null) gl.uniform1i(el, p.glowFadeEnabled ? 1 : 0);
-        const il = prog._locs['glowFadeInvert'];
-        if (il != null) gl.uniform1i(il, p.glowFadeInvert ? 1 : 0);
-    },
+    overlays: { fade: fade.overlay },
+    bindUniforms: (gl, prog, p) => fade.bindUniforms(gl, prog, p),
     glslPasses: [
         { glsl: GLOW_THRESHOLD_GLSL },
         { glsl: GLOW_BLUR_H_GLSL },
