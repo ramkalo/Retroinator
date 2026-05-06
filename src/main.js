@@ -227,6 +227,6 @@ const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone|iPad|iPod/i.tes
 if (!isMobile) {
     mobileWarningModal.classList.add('hidden');
 }
-const dismissMobileWarning = () => mobileWarningModal.classList.add('hidden');
+const dismissMobileWarning = () => { mobileWarningModal.style.display = 'none'; };
 document.getElementById('mobileWarningOk').addEventListener('click', dismissMobileWarning);
 mobileWarningModal.addEventListener('click', dismissMobileWarning);
