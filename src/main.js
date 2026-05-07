@@ -42,6 +42,23 @@ document.getElementById('loadBtn').addEventListener('click', function() {
     document.getElementById('fileInput').click();
 });
 
+document.getElementById('loadCanvasBtn').addEventListener('click', function() {
+    document.getElementById('canvasModal').classList.remove('hidden');
+});
+
+document.getElementById('closeCanvasModalBtn').addEventListener('click', function() {
+    document.getElementById('canvasModal').classList.add('hidden');
+});
+
+document.getElementById('canvasModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.add('hidden');
+    const btn = e.target.closest('[data-w]');
+    if (btn) {
+        loadBlankCanvas(parseInt(btn.dataset.w), parseInt(btn.dataset.h), btn.dataset.color);
+        this.classList.add('hidden');
+    }
+});
+
 document.getElementById('exportBtn').addEventListener('click', function() {
     document.getElementById('exportModal').classList.remove('hidden');
 });

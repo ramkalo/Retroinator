@@ -230,7 +230,6 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    border: 3px dashed var(--border);
     background: var(--bg-dark);
     transition: all 0.3s;
 }
@@ -239,8 +238,31 @@ body {
     display: none;
 }
 
-.drop-zone:hover, .drop-zone.dragover {
+.load-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 48px;
+    border: 3px dashed var(--border);
+    transition: border-color 0.3s;
+}
+
+.drop-zone:hover .load-zone,
+.drop-zone.dragover .load-zone {
     border-color: var(--accent);
+}
+
+.blank-canvas-section {
+    margin-top: 128px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.blank-canvas-label {
+    font-size: 1rem;
+    color: var(--text-dim);
 }
 
 .drop-zone-icon {
@@ -525,12 +547,12 @@ input[type="checkbox"] {
 }
 
 .drop-zone-blanks {
-    margin-top: 100px;
+    margin-top: 0;
     justify-content: center;
 }
 
 .drop-zone-blanks-portrait {
-    margin-top: 8px;
+    margin-top: 0;
     justify-content: center;
     align-items: flex-end;
 }
@@ -552,11 +574,11 @@ input[type="checkbox"] {
 }
 
 .drop-zone-blanks .btn {
-    height: 48px;
+    height: 72px;
 }
 
 .drop-zone-blanks-portrait .btn {
-    width: 48px;
+    width: 72px;
 }
 
 .blank-white {
@@ -646,6 +668,14 @@ input[type="checkbox"] {
 .modal-actions {
     display: flex;
     gap: 10px;
+    margin-top: 20px;
+}
+
+.canvas-modal {
+    min-width: min(800px, 90vw);
+}
+
+.canvas-modal .drop-zone-blanks-portrait {
     margin-top: 20px;
 }
 
