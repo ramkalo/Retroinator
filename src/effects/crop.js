@@ -4,7 +4,13 @@ function computeCropRegion(p, srcW, srcH) {
     const scale = p.cropScale / 100;
     let maxW, maxH;
     if (p.cropAspect === 'original') {
-        maxW = srcW; maxH = srcH;
+        if (p.cropFlipAspect) {
+            const ratio = srcH / srcW;
+            if (ratio > srcW / srcH) { maxW = srcW; maxH = srcW / ratio; }
+            else { maxH = srcH; maxW = srcH * ratio; }
+        } else {
+            maxW = srcW; maxH = srcH;
+        }
     } else {
         const baseRatio = ASPECT_MAP[p.cropAspect] || 1;
         const ratio = p.cropFlipAspect ? 1 / baseRatio : baseRatio;
