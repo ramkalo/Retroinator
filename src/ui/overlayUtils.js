@@ -88,6 +88,23 @@ export function hitTestCentre(e) {
 // Draws the shared ellipse-or-rect outline + edge handles + rot handle used by
 // blur, vignette, and CRT modes. cx/cy are screen pixels; a/b are semi-axes in
 // screen pixels; angle is radians.
+// Strokes the current path with alternating black/white dashes so it's visible
+// on both light and dark backgrounds.
+export function strokeAntLine() {
+    uiCtx.save();
+    uiCtx.lineWidth = 1.5;
+    uiCtx.setLineDash([5, 5]);
+    uiCtx.strokeStyle  = 'rgba(0,0,0,0.7)';
+    uiCtx.lineDashOffset = 5;
+    uiCtx.stroke();
+    uiCtx.strokeStyle  = 'rgba(255,255,255,0.9)';
+    uiCtx.lineDashOffset = 0;
+    uiCtx.stroke();
+    uiCtx.setLineDash([]);
+    uiCtx.lineDashOffset = 0;
+    uiCtx.restore();
+}
+
 export function drawEllipseOrRect(cx, cy, a, b, angle, isRect) {
     const cosA = Math.cos(angle), sinA = Math.sin(angle);
     const rotPt = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
@@ -101,11 +118,7 @@ export function drawEllipseOrRect(cx, cy, a, b, angle, isRect) {
     } else {
         uiCtx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
     }
-    uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
-    uiCtx.lineWidth   = 1.5;
-    uiCtx.setLineDash([5, 5]);
-    uiCtx.stroke();
-    uiCtx.setLineDash([]);
+    strokeAntLine();
     uiCtx.restore();
 
     const edgeW     = rotPt(a, 0);

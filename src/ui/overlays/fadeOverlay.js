@@ -1,7 +1,7 @@
 import { canvas } from '../../renderer/glstate.js';
 import { getStack, setInstanceParam } from '../../state/effectStack.js';
 import { state } from '../overlayState.js';
-import { uiCtx, uiOverlay, syncSize, drawHandle, drawRotHandle, drawCornerHandle, HIT_RADIUS } from '../overlayUtils.js';
+import { uiCtx, uiOverlay, syncSize, drawHandle, drawRotHandle, drawCornerHandle, strokeAntLine, HIT_RADIUS } from '../overlayUtils.js';
 
 function drawFadeShape(p, cx, cy, w, h) {
     if (!p[state.enabledKey]) return;
@@ -11,17 +11,13 @@ function drawFadeShape(p, cx, cy, w, h) {
     const cosA  = Math.cos(angle), sinA = Math.sin(angle);
     const rotPt = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
 
-    uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
-    uiCtx.lineWidth   = 1.5;
-    uiCtx.setLineDash([5, 5]);
-
     let edgeW, edgeH, rotHandle, topEdge;
     if (shape === 'ellipse') {
         const a = (p[state.wKey] / 100) * w / 2;
         const b = (p[state.hKey] / 100) * h / 2;
         uiCtx.beginPath();
         uiCtx.ellipse(cx, cy, Math.max(1, a), Math.max(1, b), angle, 0, Math.PI * 2);
-        uiCtx.stroke();
+        strokeAntLine();
         edgeW     = rotPt(a, 0);
         edgeH     = rotPt(0, -b);
         topEdge   = edgeH;
@@ -34,15 +30,13 @@ function drawFadeShape(p, cx, cy, w, h) {
         uiCtx.rotate(angle);
         uiCtx.beginPath();
         uiCtx.rect(-hw, -hh, hw * 2, hh * 2);
-        uiCtx.stroke();
+        strokeAntLine();
         uiCtx.restore();
         edgeW     = rotPt(hw, 0);
         edgeH     = rotPt(0, -hh);
         topEdge   = edgeH;
         rotHandle = rotPt(0, -(hh + 22));
     }
-
-    uiCtx.setLineDash([]);
     uiCtx.beginPath();
     uiCtx.moveTo(topEdge[0], topEdge[1]);
     uiCtx.lineTo(rotHandle[0], rotHandle[1]);

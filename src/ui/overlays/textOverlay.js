@@ -1,7 +1,7 @@
 import { canvas } from '../../renderer/glstate.js';
 import { getStack, setInstanceParam } from '../../state/effectStack.js';
 import { state } from '../overlayState.js';
-import { uiCtx, uiOverlay, syncSize, drawHandle, drawRotHandle, drawCornerHandle, HIT_RADIUS } from '../overlayUtils.js';
+import { uiCtx, uiOverlay, syncSize, drawHandle, drawRotHandle, drawCornerHandle, strokeAntLine, HIT_RADIUS } from '../overlayUtils.js';
 
 export function textCorners(p, W, H) {
     const tlx  = (p.textTLx ?? 10) / 100 * W,  tly  = (p.textTLy ?? 65) / 100 * H;
@@ -34,17 +34,13 @@ export function drawTextOverlay(p) {
             topMidX, topMidY, rhx, rhy,
             rightMidX, rightMidY, bottomMidX, bottomMidY, leftMidX, leftMidY } = textCorners(p, W, H);
 
-    uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
-    uiCtx.lineWidth   = 1.5;
-    uiCtx.setLineDash([5, 5]);
     uiCtx.beginPath();
     uiCtx.moveTo(tlx, tly);
     uiCtx.lineTo(trx, try_);
     uiCtx.lineTo(brx, bry);
     uiCtx.lineTo(blx, bly);
     uiCtx.closePath();
-    uiCtx.stroke();
-    uiCtx.setLineDash([]);
+    strokeAntLine();
 
     uiCtx.beginPath();
     uiCtx.moveTo(topMidX, topMidY);
@@ -73,17 +69,13 @@ export function drawTextOverlay(p) {
         const fcy    = (0.5 - p.textFadeY / 100) * H;
         const rotPt  = (lx, ly) => [fcx + lx * cosA - ly * sinA, fcy + lx * sinA + ly * cosA];
 
-        uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
-        uiCtx.lineWidth   = 1.5;
-        uiCtx.setLineDash([5, 5]);
-
         let fadeEdgeW, fadeEdgeH, fadeRotHandle, topEdge;
         if (shape === 'ellipse') {
             const a = (p[state.wKey] / 100) * W / 2;
             const b = (p[state.hKey] / 100) * H / 2;
             uiCtx.beginPath();
             uiCtx.ellipse(fcx, fcy, Math.max(1, a), Math.max(1, b), fAngle, 0, Math.PI * 2);
-            uiCtx.stroke();
+            strokeAntLine();
             fadeEdgeW     = rotPt(a, 0);
             fadeEdgeH     = rotPt(0, -b);
             topEdge       = fadeEdgeH;
@@ -96,15 +88,13 @@ export function drawTextOverlay(p) {
             uiCtx.rotate(fAngle);
             uiCtx.beginPath();
             uiCtx.rect(-hw, -hh, hw * 2, hh * 2);
-            uiCtx.stroke();
+            strokeAntLine();
             uiCtx.restore();
             fadeEdgeW     = rotPt(hw, 0);
             fadeEdgeH     = rotPt(0, -hh);
             topEdge       = fadeEdgeH;
             fadeRotHandle = rotPt(0, -(hh + 22));
         }
-
-        uiCtx.setLineDash([]);
         uiCtx.beginPath();
         uiCtx.moveTo(topEdge[0], topEdge[1]);
         uiCtx.lineTo(fadeRotHandle[0], fadeRotHandle[1]);
