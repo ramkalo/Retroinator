@@ -25,7 +25,6 @@ uniform float pixelColors;
 ${blend.glsl}
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     vec2 pixelCoord = vUV * uResolution;
     vec2 cellUV = floor(pixelCoord / pixelSize) * pixelSize / uResolution;
     vec4 cell = texture(uTex, clamp(cellUV, vec2(0.0), vec2(1.0)));
@@ -34,7 +33,9 @@ void main() {
     col.r = floor(col.r / qstep) * qstep;
     col.g = floor(col.g / qstep) * qstep;
     col.b = floor(col.b / qstep) * qstep;
-    fragColor = vec4(${blend.blendFn}(c.rgb, col / 255.0), c.a);
+    vec3 adjusted = col / 255.0;
+    if (!${blend.thresholdFn}(c, vec4(adjusted, c.a))) { fragColor = c; return; }
+    fragColor = vec4(${blend.blendFn}(c.rgb, adjusted), c.a);
 }
 `,
 };

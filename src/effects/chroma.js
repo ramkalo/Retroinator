@@ -89,8 +89,6 @@ float wavesFormula(float xN, float yN) {
 void main() {
     vec4 orig = texture(uTex, vUV);
 
-    if (!${blend.thresholdFn}(orig)) { fragColor = orig; return; }
-
     float weight = ${fade.fnName}();
 
     float r, g, b;
@@ -107,6 +105,7 @@ void main() {
         g = texture(uTex, clamp(vec2(vUV.x + wave * ampG / uResolution.x, vUV.y), vec2(0.0), vec2(1.0))).g;
         b = texture(uTex, clamp(vec2(vUV.x + wave * ampB / uResolution.x, vUV.y), vec2(0.0), vec2(1.0))).b;
         vec3 adjusted = vec3(mix(orig.r, r, weight), mix(orig.g, g, weight), mix(orig.b, b, weight));
+        if (!${blend.thresholdFn}(orig, vec4(adjusted, orig.a))) { fragColor = orig; return; }
         fragColor = vec4(${blend.blendFn}(orig.rgb, adjusted), orig.a);
         return;
     }
@@ -131,6 +130,7 @@ void main() {
         g = chromaSample(gShift).g;
         b = chromaSample(bShift).b;
     }
+    if (!${blend.thresholdFn}(orig, vec4(r, g, b, orig.a))) { fragColor = orig; return; }
     fragColor = vec4(${blend.blendFn}(orig.rgb, vec3(r, g, b)), orig.a);
 }
 `,

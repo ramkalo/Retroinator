@@ -52,7 +52,6 @@ float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453
 
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     vec4 col = c;
 
     if (vhsTracking > 0.0) {
@@ -97,6 +96,7 @@ void main() {
 
     float weight = ${fade.fnName}();
     vec3 faded   = mix(c.rgb, col.rgb, weight);
+    if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
 }
 `,

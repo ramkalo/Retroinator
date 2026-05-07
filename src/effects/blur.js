@@ -90,7 +90,6 @@ uniform int   blurMode;
 ${blend.glsl}
 void main() {
     vec4 orig    = texture(uTexOriginal, vUV);
-    if (!${blend.thresholdFn}(orig)) { fragColor = orig; return; }
     vec4 blurred = texture(uTex, vUV);
 
     float centerUX = 0.5 + blurCenterX / 100.0;
@@ -114,6 +113,7 @@ void main() {
     float weight = clamp(falloff * edgeStr + (1.0 - falloff) * centerStr, 0.0, 1.0);
 
     vec3 adjusted = mix(orig.rgb, blurred.rgb, weight);
+    if (!${blend.thresholdFn}(orig, vec4(adjusted, orig.a))) { fragColor = orig; return; }
     fragColor = vec4(${blend.blendFn}(orig.rgb, adjusted), orig.a);
 }
 `;

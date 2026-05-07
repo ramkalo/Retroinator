@@ -321,13 +321,12 @@ void main() {
 
     if (zone < 0) { fragColor = c; return; }
 
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
-
     float weight = ${fade.fnName}();
 
     if (corruptedIsStatic == 1) {
         float n = hash21(vec2(cx, cy));
         vec3 faded = mix(c.rgb, vec3(n, n, n), weight);
+        if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
         fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
         return;
     }
@@ -337,6 +336,7 @@ void main() {
         float g = hash21(vec2(cy + 47.0, cx + 23.0));
         float b = hash21(vec2(cx + 83.0, cy + 61.0));
         vec3 faded = mix(c.rgb, vec3(r, g, b), weight);
+        if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
         fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
         return;
     }
@@ -346,12 +346,14 @@ void main() {
         vec2 offset  = encoded * 2.0 - 1.0;
         vec3 adjusted = texture(uTex, fract(vUV + offset)).rgb;
         vec3 faded = mix(c.rgb, adjusted, weight);
+        if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
         fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
         return;
     }
 
     vec3 adjusted = texture(uColorTex, vec2(u, v)).rgb;
     vec3 faded    = mix(c.rgb, adjusted, weight);
+    if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
 }
 `,

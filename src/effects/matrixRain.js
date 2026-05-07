@@ -1,3 +1,8 @@
+import { buildFadeControl, buildBlendControl } from './controls/index.js';
+
+const fade  = buildFadeControl('matrixRain');
+const blend = buildBlendControl('matrixRain');
+
 // Seeded xorshift32 PRNG — deterministic per seed
 function seededRng(seed) {
     let s = (seed >>> 0) || 1;
@@ -149,7 +154,7 @@ function resolveColor(colorKey, x, y, rng, imageCtx) {
 
 // --- Main canvas2d function ---
 
-function applyMatrixRain(ctx, p) {
+function applyMatrixRain(ctx, p, srcCanvas) {
     const w = ctx.canvas.width;
     const h = ctx.canvas.height;
 
@@ -159,7 +164,7 @@ function applyMatrixRain(ctx, p) {
     const direction    = p.matrixRainDirection;
     const order        = p.matrixRainOrder;
     const font         = p.matrixRainFont;
-    const opacity      = p.matrixRainOpacity / 100;
+    const opacity      = p.matrixRainCharOpacity / 100;
     const colorKey  = p.matrixRainColor;
 
     const charStep = size + charSpacing;  // along flow direction
@@ -197,11 +202,16 @@ function applyMatrixRain(ctx, p) {
     applySpaceInject(chars, p.matrixRainSpaceInject, rngSpaces);
     if (order === 'reverse') chars = chars.reverse();
 
-    // Save original image pixels for imagePaletteNoise sampling
+    // Save original image pixels for imagePaletteNoise sampling.
+    // Use srcCanvas (pre-effect pipeline state) when available; fall back to copying ctx.canvas.
     let savedCanvas = null;
     if (colorKey === 'imagePaletteNoise' || colorKey === 'imagePaletteRandom') {
-        savedCanvas = new OffscreenCanvas(w, h);
-        savedCanvas.getContext('2d').drawImage(ctx.canvas, 0, 0);
+        if (srcCanvas) {
+            savedCanvas = srcCanvas;
+        } else {
+            savedCanvas = new OffscreenCanvas(w, h);
+            savedCanvas.getContext('2d').drawImage(ctx.canvas, 0, 0);
+        }
     }
     const imageCtx = savedCanvas ? savedCanvas.getContext('2d') : null;
 
@@ -242,15 +252,20 @@ export const matrixRainEffect = {
     name: 'matrixRain',
     label: 'Matrix Rain',
     pass: 'context',
+    blendPrefix: 'matrixRain',
+    bindUniforms: (gl, prog, p) => { fade.bindUniforms(gl, prog, p); blend.bindUniforms(gl, prog, p); },
 
-    paramKeys: [],
-    handleParams: ['matrixRainX', 'matrixRainY'],
+    paramKeys: [...fade.paramKeys, ...blend.paramKeys],
+    handleParams: ['matrixRainX', 'matrixRainY', ...fade.handleParams],
+    overlays: { fade: fade.overlay },
 
     uiGroups: [
         { label: 'Text',     keys: ['matrixRainText', 'matrixRainMode'] },
         { label: 'Inject',   keys: ['matrixRainInjectEnabled', 'matrixRainInjectPercent', 'matrixRainInjectSeed', 'matrixRainSpaceInject'] },
         { label: 'Layout',   keys: ['matrixRainDirection', 'matrixRainOrder', 'matrixRainSize', 'matrixRainCharSpacing', 'matrixRainLineSpacing', 'matrixRainWordSpacing', 'matrixRainFont'] },
-        { label: 'Color',    keys: ['matrixRainColor', 'matrixRainOpacity'] },
+        { label: 'Color',    keys: ['matrixRainColor', 'matrixRainCharOpacity'] },
+        fade.uiGroup,
+        blend.uiGroup,
     ],
 
     params: {
@@ -302,7 +317,9 @@ export const matrixRainEffect = {
             ['imagePaletteNoise',   'Image Palette Inside'],
             ['imagePaletteRandom',  'Image Palette Noise'],
         ] },
-        matrixRainOpacity:       { default: 100, min: 0, max: 100, label: 'Opacity' },
+        matrixRainCharOpacity:       { default: 100, min: 0, max: 100, label: 'Opacity' },
+        ...fade.params,
+        ...blend.params,
     },
 
     enabled(p) { return p.matrixRainEnabled; },

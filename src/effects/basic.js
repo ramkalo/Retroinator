@@ -51,7 +51,6 @@ ${fade.glsl}
 ${blend.glsl}
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     vec3 orig = c.rgb * 255.0;
     float r = orig.r, g = orig.g, b = orig.b;
 
@@ -72,6 +71,7 @@ void main() {
     if (tint != 0.0) { g += tint*0.25; }
 
     vec3 adjusted = clamp(vec3(r,g,b), 0.0, 255.0) / 255.0;
+    if (!${blend.thresholdFn}(c, vec4(adjusted, c.a))) { fragColor = c; return; }
     vec3 blended = ${blend.blendFn}(c.rgb, adjusted);
     vec3 final = mix(c.rgb, blended, weight);
     fragColor = vec4(final, c.a);

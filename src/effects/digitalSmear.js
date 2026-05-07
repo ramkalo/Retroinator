@@ -47,7 +47,6 @@ float wavesFormula(float xN, float yN) {
 
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     float amp   = smearWidth / 10.0;
     float phase = smearShift / 100.0 * 20.0;
     vec2 uv = vUV;
@@ -69,6 +68,7 @@ void main() {
     float weight  = ${fade.fnName}();
     vec3 adjusted = texture(uTex, uv).rgb;
     vec3 faded    = mix(c.rgb, adjusted, weight);
+    if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
 }
 `,

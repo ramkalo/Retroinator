@@ -88,7 +88,6 @@ bool inPoly(vec2 uv) {
 
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     bool inside;
     if      (vpShape == 0) inside = inRect(vUV);
     else if (vpShape == 1) inside = inCircle(vUV);
@@ -97,6 +96,7 @@ void main() {
     if (vpInvert > 0.5) inside = !inside;
 
     vec3 adjusted = inside ? texture(uTexWindow, vUV).rgb : c.rgb;
+    if (!${blend.thresholdFn}(c, vec4(adjusted, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, adjusted), c.a);
 }
 `,

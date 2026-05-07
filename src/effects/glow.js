@@ -3,20 +3,6 @@ import { buildFadeControl, buildBlendControl } from './controls/index.js';
 const fade  = buildFadeControl('glow');
 const blend = buildBlendControl('glow');
 
-const GLOW_THRESHOLD_GLSL = `
-uniform float glowThreshold;
-
-void main() {
-    vec4 c = texture(uTex, vUV);
-    float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114)) * 255.0;
-    if (lum > glowThreshold) {
-        float factor = (lum - glowThreshold) / max(255.0 - glowThreshold, 0.001);
-        fragColor = vec4(c.rgb * factor, 1.0);
-    } else {
-        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
-    }
-}
-`;
 
 const GLOW_BLUR_H_GLSL = `
 uniform float glowRadius;
@@ -63,15 +49,15 @@ ${fade.glsl}
 ${blend.glsl}
 void main() {
     vec4 orig    = texture(uTexOriginal, vUV);
-    if (!${blend.thresholdFn}(orig)) { fragColor = orig; return; }
     vec4 blurred = texture(uTex, vUV);
 
     float weight = ${fade.fnName}();
 
     float intensity = glowIntensity / 100.0;
     vec3 glow = blurred.rgb * intensity * weight;
-    vec3 result = 1.0 - (1.0 - orig.rgb) * (1.0 - glow);
-    fragColor = vec4(${blend.blendFn}(orig.rgb, clamp(result, 0.0, 1.0)), orig.a);
+    vec3 result = clamp(1.0 - (1.0 - orig.rgb) * (1.0 - glow), 0.0, 1.0);
+    if (!${blend.thresholdFn}(orig, vec4(result, orig.a))) { fragColor = orig; return; }
+    fragColor = vec4(${blend.blendFn}(orig.rgb, result), orig.a);
 }
 `;
 
@@ -80,7 +66,7 @@ export default {
     label: 'Glow',
     pass: 'pre-crt',
     paramKeys: [
-        'glowThreshold', 'glowRadius', 'glowIntensity',
+        'glowRadius', 'glowIntensity',
         ...fade.paramKeys,
         ...blend.paramKeys,
     ],
@@ -89,13 +75,12 @@ export default {
         glowEnabled:   { default: false, label: 'Enable' },
         glowIntensity: { default: 80,  min: 0,   max: 300, label: 'Intensity' },
         glowRadius:    { default: 60,  min: 1,   max: 60,  label: 'Radius' },
-        glowThreshold: { default: 0,   min: 0,   max: 255, label: 'Threshold' },
         ...fade.params,
         ...blend.params,
     },
     enabled: (p) => p.glowEnabled,
     uiGroups: [
-        { keys: ['glowThreshold', 'glowRadius', 'glowIntensity'] },
+        { keys: ['glowRadius', 'glowIntensity'] },
         fade.uiGroup,
         blend.uiGroup,
     ],
@@ -105,7 +90,6 @@ export default {
         blend.bindUniforms(gl, prog, p);
     },
     glslPasses: [
-        { glsl: GLOW_THRESHOLD_GLSL },
         { glsl: GLOW_BLUR_H_GLSL },
         { glsl: GLOW_BLUR_V_GLSL },
         { glsl: GLOW_COMPOSITE_GLSL, needsOriginal: true },

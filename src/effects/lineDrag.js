@@ -12,25 +12,23 @@ export default {
 
     paramKeys: [
         'lineDragX', 'lineDragY', 'lineDragAngle', 'lineDragDir',
-        'lineDragThresholdOnDest',
         ...blend.paramKeys,
         ...fade.paramKeys,
     ],
 
     params: {
-        lineDragEnabled:          { default: false, label: 'Enable' },
-        lineDragX:                { default: 50, min: 0, max: 100, label: 'X' },
-        lineDragY:                { default: 50, min: 0, max: 100, label: 'Y' },
-        lineDragAngle:            { default: 0, min: -89, max: 89, step: 1, label: 'Angle' },
-        lineDragDir:              { default: 'down', label: 'Direction', options: [['down', 'Down'], ['up', 'Up'], ['right', 'Right'], ['left', 'Left']] },
-        lineDragThresholdOnDest:  { default: false, label: 'On Destination' },
+        lineDragEnabled: { default: false, label: 'Enable' },
+        lineDragX:       { default: 50, min: 0, max: 100, label: 'X' },
+        lineDragY:       { default: 50, min: 0, max: 100, label: 'Y' },
+        lineDragAngle:   { default: 0, min: -89, max: 89, step: 1, label: 'Angle' },
+        lineDragDir:     { default: 'down', label: 'Direction', options: [['down', 'Down'], ['up', 'Up'], ['right', 'Right'], ['left', 'Left']] },
         ...blend.params,
         ...fade.params,
     },
 
     uiGroups: [
         { keys: ['lineDragEnabled', 'lineDragAngle', 'lineDragDir'] },
-        { label: 'Blend', keys: ['lineDragThresholdOnDest', ...blend.uiGroup.keys] },
+        blend.uiGroup,
         fade.uiGroup,
     ],
 
@@ -49,7 +47,6 @@ uniform float lineDragX;
 uniform float lineDragY;
 uniform float lineDragAngle;
 uniform int   lineDragDir;
-uniform int   lineDragThresholdOnDest;
 ${blend.glsl}
 ${fade.glsl}
 void main() {
@@ -81,8 +78,7 @@ void main() {
     vec4 origColor    = texture(uTex, uv);
     vec4 sampledColor = texture(uTex, sampleUV);
 
-    vec4 checkColor = (lineDragThresholdOnDest == 1) ? origColor : sampledColor;
-    bool passThreshold = ${blend.thresholdFn}(checkColor);
+    bool passThreshold = ${blend.thresholdFn}(origColor, sampledColor);
     vec4 effectColor = (inDragRegion && passThreshold) ? sampledColor : origColor;
 
     float weight = ${fade.fnName}();

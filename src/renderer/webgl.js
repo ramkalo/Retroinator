@@ -7,6 +7,7 @@ import {
 } from './glstate.js';
 import { getEffect } from '../effects/registry.js';
 import { isCropPreviewActive } from '../state/cropPreview.js';
+import { buildBlendControl, buildFadeControl } from '../effects/controls/index.js';
 
 // Coordinate system: UNPACK_FLIP_Y_WEBGL=true on image uploads, no Y flip in vertex shader.
 // vUV = (0,0) at screen/image bottom-left, (1,1) at screen/image top-right.
@@ -209,6 +210,62 @@ function _getOverlayTex() {
     return _overlayTex;
 }
 
+// --- Sticker texture cache (canvas2d blend compositor) ---
+let _stickerTex  = null;
+let _stickerTexW = 0;
+let _stickerTexH = 0;
+
+function _uploadStickerTex(stickerCanvas) {
+    const w = stickerCanvas.width, h = stickerCanvas.height;
+    if (!_stickerTex || _stickerTexW !== w || _stickerTexH !== h) {
+        if (_stickerTex) gl.deleteTexture(_stickerTex);
+        _stickerTex  = createTexture(w, h);
+        _stickerTexW = w;
+        _stickerTexH = h;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, _stickerTex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, stickerCanvas);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return _stickerTex;
+}
+
+// Caches of blend/fade controls keyed by prefix, built on first use
+const _blendControlCache = new Map();
+const _fadeControlCache  = new Map();
+function _getBlendControl(prefix) {
+    if (!_blendControlCache.has(prefix)) _blendControlCache.set(prefix, buildBlendControl(prefix));
+    return _blendControlCache.get(prefix);
+}
+function _getFadeControl(prefix) {
+    if (!_fadeControlCache.has(prefix)) _fadeControlCache.set(prefix, buildFadeControl(prefix));
+    return _fadeControlCache.get(prefix);
+}
+
+function _buildCanvas2DCompositorGLSL(blend, fade) {
+    const blendEnabledUniform = blend.blendFn.replace('Blend', 'BlendEnabled');
+    const opacityUniform      = blend.blendFn.replace('Blend', 'Opacity');
+    return `uniform sampler2D uStickerTex;
+
+${blend.glsl}
+${fade ? fade.glsl : ''}
+
+void main() {
+    vec4 c   = texture(uTex, vUV);
+    vec4 src = texture(uStickerTex, vUV);
+    if (src.a < 0.001) { fragColor = c; return; }
+    if (!${blend.thresholdFn}(c, src)) { fragColor = c; return; }
+    vec3 srcColor = (${blendEnabledUniform} == 1)
+        ? vec3(${blend.blendChFn}(c.r, src.r),
+               ${blend.blendChFn}(c.g, src.g),
+               ${blend.blendChFn}(c.b, src.b))
+        : src.rgb;
+    float weight = ${fade ? `${fade.fnName}()` : '1.0'};
+    fragColor = vec4(mix(c.rgb, srcColor, src.a * ${opacityUniform} / 100.0 * weight), c.a);
+}`;
+}
+
 // --- Transform FBO cache ---
 let _transformFBO = null;
 
@@ -290,21 +347,49 @@ function _runLinear(stack, startTex) {
         if (effect.pass === 'context') {
             if (!overlayCanvas || !overlayCtx || !effect.canvas2d) continue;
 
-            runPass(PASSTHROUGH_FRAG, srcTex, null, null, null);
+            // Blit current state to canvas so canvas2d effects can read pixels via srcCanvas.
             // Keep overlayCanvas in sync with the current canvas size — transform passes
             // (e.g. crop) may have resized the canvas since processWebGLStack set it to
             // the full image size. If sizes differ, the blit into the pool FBO maps the
             // entire overlayCanvas texture over a smaller target, producing a stretched image.
+            runPass(PASSTHROUGH_FRAG, srcTex, null, null, null);
             if (overlayCanvas.width !== canvas.width || overlayCanvas.height !== canvas.height) {
                 overlayCanvas.width  = canvas.width;
                 overlayCanvas.height = canvas.height;
             }
-            overlayCtx.clearRect(0, 0, canvas.width, canvas.height);
-            overlayCtx.drawImage(canvas, 0, 0);
-            effect.canvas2d(overlayCtx, instance.params);
 
             const dstFbo = fboPool[pingIdx % 2];
-            runPass(PASSTHROUGH_FRAG, _getOverlayTex(), dstFbo, null, null);
+
+            if (effect.blendPrefix) {
+                // Render effect onto a transparent sticker canvas, then blend onto pipeline via WebGL.
+                const stickerCanvas = new OffscreenCanvas(canvas.width, canvas.height);
+                effect.canvas2d(stickerCanvas.getContext('2d'), instance.params, canvas);
+
+                const stickerTex = _uploadStickerTex(stickerCanvas);
+                const blend      = _getBlendControl(effect.blendPrefix);
+                const fade       = _getFadeControl(effect.blendPrefix);
+                const prog       = getProgram(_buildCanvas2DCompositorGLSL(blend, fade));
+                if (prog) {
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFbo.fbo);
+                    gl.viewport(0, 0, dstFbo.width, dstFbo.height);
+                    gl.useProgram(prog);
+                    bindTex0(prog, srcTex);
+                    setStdUniforms(prog, dstFbo.width, dstFbo.height);
+                    gl.activeTexture(gl.TEXTURE1);
+                    gl.bindTexture(gl.TEXTURE_2D, stickerTex);
+                    if (prog._locs.uStickerTex != null) gl.uniform1i(prog._locs.uStickerTex, 1);
+                    gl.activeTexture(gl.TEXTURE0);
+                    autoBindUniforms(prog, effect, instance.params);
+                    if (effect.bindUniforms) effect.bindUniforms(gl, prog, instance.params, dstFbo.width, dstFbo.height);
+                    drawQuad();
+                }
+            } else {
+                // Legacy path: draw directly onto overlayCanvas (for canvas2d effects without blend controls).
+                overlayCtx.clearRect(0, 0, canvas.width, canvas.height);
+                overlayCtx.drawImage(canvas, 0, 0);
+                effect.canvas2d(overlayCtx, instance.params);
+                runPass(PASSTHROUGH_FRAG, _getOverlayTex(), dstFbo, null, null);
+            }
 
             srcTex = dstFbo.tex;
             pingIdx++;
@@ -514,6 +599,9 @@ export function cleanupWebGL() {
     destroyFBO(_vpPostFBO);    _vpPostFBO = null;
     if (_origTex)    { gl.deleteTexture(_origTex);    _origTex    = null; }
     if (_overlayTex) { gl.deleteTexture(_overlayTex); _overlayTex = null; }
+    if (_stickerTex) { gl.deleteTexture(_stickerTex); _stickerTex = null; }
+    _blendControlCache.clear();
+    _fadeControlCache.clear();
     setSecondTexture(null);
     programCache.forEach(prog => gl.deleteProgram(prog));
     programCache.clear();

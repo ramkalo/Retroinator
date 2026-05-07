@@ -32,7 +32,6 @@ ${fade.glsl}
 ${blend.glsl}
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     float darken  = 1.0 - (crtScanline / 100.0) * 0.7;
     float spacing = floor(crtScanSpacing);
     float row     = floor((1.0 - vUV.y) * uResolution.y);
@@ -40,6 +39,7 @@ void main() {
     if (mod(row, spacing) < 1.0) {
         vec3 adjusted = c.rgb * darken;
         vec3 faded = mix(c.rgb, adjusted, weight);
+        if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
         fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
     } else {
         fragColor = c;

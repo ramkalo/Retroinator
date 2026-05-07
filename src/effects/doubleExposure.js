@@ -71,7 +71,6 @@ float blendCh(float a, float b) {
 
 void main() {
     vec4 orig = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(orig)) { fragColor = orig; return; }
 
     vec2 secUV = vUV - vec2(doubleExposureTexX / 100.0, doubleExposureTexY / 100.0);
     if (secUV.x < 0.0 || secUV.x > 1.0 || secUV.y < 0.0 || secUV.y > 1.0) {
@@ -88,6 +87,7 @@ void main() {
     float weight = ${fade.fnName}();
 
     result = mix(orig.rgb, result, weight);
+    if (!${blend.thresholdFn}(orig, vec4(result, orig.a))) { fragColor = orig; return; }
     fragColor = vec4(${blend.blendFn}(orig.rgb, result), orig.a);
 }
 `,

@@ -1,3 +1,8 @@
+import { buildFadeControl, buildBlendControl } from './controls/index.js';
+
+const fade  = buildFadeControl('text');
+const blend = buildBlendControl('text');
+
 const NAMED_TEXT_COLORS = {
     white:   'rgba(255,255,255,0.92)',
     black:   'rgba(0,0,0,0.92)',
@@ -24,9 +29,9 @@ function seededRandom(seed, idx) {
     return h / 0x100000000;
 }
 
-function samplePalette(ctx, seed, count = 64) {
-    const W = ctx.canvas.width, H = ctx.canvas.height;
-    const data = ctx.getImageData(0, 0, W, H).data;
+function samplePalette(srcCtx, seed, count = 64) {
+    const W = srcCtx.canvas.width, H = srcCtx.canvas.height;
+    const data = srcCtx.getImageData(0, 0, W, H).data;
     const palette = [];
     for (let i = 0; i < count; i++) {
         const px = Math.floor(seededRandom(seed, i * 2) * W);
@@ -59,8 +64,8 @@ function wrapLine(ctx, text, maxW) {
     return lines;
 }
 
-export function applyText(ctx, p) {
-    const opacity = p.textOpacity ?? 1;
+export function applyText(ctx, p, srcCanvas) {
+    const opacity = p.textCharAlpha ?? 1;
     
     const W = ctx.canvas.width;
     const H = ctx.canvas.height;
@@ -105,7 +110,7 @@ export function applyText(ctx, p) {
     const colorKey    = p.textColor ?? 'white';
     const strokeColor = (colorKey === 'black') ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
     const seed        = p.textNoiseSeed ?? 0;
-    const palette     = colorKey === 'paletteNoise' ? samplePalette(ctx, seed) : null;
+    const palette     = colorKey === 'paletteNoise' ? samplePalette(srcCanvas ? srcCanvas.getContext('2d') : ctx, seed) : null;
     let   noiseIdx    = 0;
 
     // Background: fill the actual quad shape
@@ -197,15 +202,23 @@ export const textEffect = {
     name: 'text',
     label: 'Text',
     pass: 'context',
+    blendPrefix: 'text',
+    bindUniforms: (gl, prog, p) => { fade.bindUniforms(gl, prog, p); blend.bindUniforms(gl, prog, p); },
     paramKeys: [
         'text', 'textFont', 'textSize', 'textBold', 'textItalic', 'textStrike', 'textLineHeight',
         'textColor', 'textBg',
         'textWrap', 'textAlign', 'textVAlign',
         'textTLx', 'textTLy', 'textTRx', 'textTRy',
         'textBRx', 'textBRy', 'textBLx', 'textBLy',
-        'textOpacity', 'textNoiseSeed',
+        'textCharAlpha', 'textNoiseSeed',
+        ...fade.paramKeys,
+        ...blend.paramKeys,
     ],
-    handleParams: ['textTLx', 'textTLy', 'textTRx', 'textTRy', 'textBRx', 'textBRy', 'textBLx', 'textBLy'],
+    handleParams: [
+        'textTLx', 'textTLy', 'textTRx', 'textTRy', 'textBRx', 'textBRy', 'textBLx', 'textBLy',
+        ...fade.handleParams,
+    ],
+    overlays: { fade: fade.overlay },
     params: {
         textEnabled:    { default: false, label: 'Enable' },
         text:           { default: 'DEC 31 1999 11:59:59', label: 'Text' },
@@ -233,7 +246,7 @@ export const textEffect = {
         ] },
         textNoiseSeed:      { default: 0 },
         textNoiseRandomize: { default: null, label: 'Randomize' },
-        textOpacity:        { default: 1, min: 0, max: 1, step: 0.01 },
+        textCharAlpha:        { default: 1, min: 0, max: 1, step: 0.01 },
         textBg:         { default: 'none', label: 'Background', options: [
             ['none','None'], ['black','Black'], ['white','White'],
             ['semi-black','Semi Black'], ['semi-white','Semi White'],
@@ -252,12 +265,16 @@ export const textEffect = {
         textBLx:        { default: 10, label: 'BL X' },
         textBLy:        { default: 95, label: 'BL Y' },
         textBoxReset:   { default: null, label: 'Reset Box' },
+        ...fade.params,
+        ...blend.params,
     },
     enabled: (p) => p.textEnabled && !!p.text,
     uiGroups: [
         { keys: ['text', 'textFont', 'textSize', 'textBold', 'textItalic', 'textStrike', 'textLineHeight'] },
-        { label: 'Color', keys: ['textColor', 'textNoiseRandomize', 'textBg', 'textOpacity'] },
+        { label: 'Color', keys: ['textColor', 'textNoiseRandomize', 'textBg', 'textCharAlpha'] },
         { label: 'Layout', keys: ['textWrap', 'textAlign', 'textVAlign', 'textBoxReset'] },
+        fade.uiGroup,
+        blend.uiGroup,
     ],
     canvas2d: applyText,
 };

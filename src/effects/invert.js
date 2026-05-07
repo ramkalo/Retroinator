@@ -58,13 +58,13 @@ ${fade.glsl}
 ${blend.glsl}
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     float lum = 0.299*c.r + 0.587*c.g + 0.114*c.b;
     vec3 adjusted = (invertAllColors == 1)
         ? vec3(1.0 - c.r, 1.0 - c.g, 1.0 - c.b)
         : mix(invertColorA, invertColorB, lum);
     float weight = ${fade.fnName}();
     vec3 faded = mix(c.rgb, adjusted, weight);
+    if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
 }
 `,

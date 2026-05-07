@@ -35,7 +35,6 @@ uniform float crtCurvatureAngle;
 ${blend.glsl}
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     float cx = (0.5 + crtCurvatureX / 100.0) * uResolution.x;
     float cy = (0.5 - crtCurvatureY / 100.0) * uResolution.y;
     float k = crtCurvatureStrength / 100.0;
@@ -63,6 +62,7 @@ void main() {
 
     vec2 sampleUV = clamp(vec2(srcX / uResolution.x, 1.0 - srcY / uResolution.y), vec2(0.0), vec2(1.0));
     vec3 adjusted = texture(uTex, sampleUV).rgb;
+    if (!${blend.thresholdFn}(c, vec4(adjusted, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, adjusted), c.a);
 }
 `,

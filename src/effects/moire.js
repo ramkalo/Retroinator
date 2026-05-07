@@ -32,7 +32,6 @@ uniform float moireRotation;
 ${blend.glsl}
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
 
     vec2 pos = vec2(vUV.x * uResolution.x, (1.0 - vUV.y) * uResolution.y);
 
@@ -55,6 +54,7 @@ void main() {
 
     float intensity = (moireStrength / 100.0) * 0.9;
     vec3 adjusted = c.rgb * (1.0 - intensity * (1.0 - pattern));
+    if (!${blend.thresholdFn}(c, vec4(adjusted, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, adjusted), c.a);
 }
 `,

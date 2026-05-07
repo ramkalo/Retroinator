@@ -64,7 +64,6 @@ vec3 hsl2rgb(float h, float s, float l) {
 
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     vec3 hsl = rgb2hsl(c.rgb);
     float h = hsl.x, s = hsl.y, l = hsl.z;
     float threshold = chanSatMinSat / 100.0;
@@ -79,6 +78,7 @@ void main() {
     float newS   = clamp(s + satDelta, 0.0, 1.0);
     vec3  modRgb = hsl2rgb(h, newS, l);
     vec3  faded  = mix(c.rgb, modRgb, weight);
+    if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
 }
 `,

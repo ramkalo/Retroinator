@@ -45,7 +45,7 @@ function ssGrabHandles(p) {
     const handle = (lx, ly) => [cx + lx * cosA - ly * sinA, cy + lx * sinA + ly * cosA];
     return {
         center: [cx, cy],
-        rot: handle(0, -(Math.max(gh, gw) / 2 + 22)),
+        rot: handle(0, -(Math.min(Math.max(gh, gw) / 2, Math.hypot(W, H) / 2) + 22)),
         tl: handle(-gw / 2, -gh / 2),
         tr: handle(gw / 2, -gh / 2),
         br: handle(gw / 2, gh / 2),
@@ -108,7 +108,7 @@ export function drawShapeSticker(p) {
 
     let shapeRadius = Math.hypot(sw/2, sh/2);
     for (const v of localVerts) shapeRadius = Math.max(shapeRadius, Math.hypot(v.x, v.y));
-    const rotDist = shapeRadius + 18;
+    const rotDist = Math.min(shapeRadius, Math.hypot(W, H) / 2) + 18;
     const rotHandle = [
         cx + 0 * cosA - (-rotDist) * sinA,
         cy + 0 * sinA + (-rotDist) * cosA,
@@ -264,7 +264,7 @@ export function hitTestShapeSticker(e) {
 
     let shapeRadius = Math.hypot(sw/2, sh/2);
     for (const v of localVerts) shapeRadius = Math.max(shapeRadius, Math.hypot(v.x, v.y));
-    const rotDist = shapeRadius + 18;
+    const rotDist = Math.min(shapeRadius, Math.hypot(W, H) / 2) + 18;
     const rotH = [cx + 0 * cosA - (-rotDist) * sinA, cy + 0 * sinA + (-rotDist) * cosA];
     if (Math.hypot(mx - rotH[0], my - rotH[1]) <= HIT_RADIUS) return 'rot';
 
@@ -273,11 +273,16 @@ export function hitTestShapeSticker(e) {
         cy + v.x * sinA + (-v.y) * cosA,
     ]);
 
-    if (shape === 'rectangle' || shape === 'ellipse') {
+    if (shape === 'rectangle') {
         const corners = { tr: screenVerts[1], br: screenVerts[2], bl: screenVerts[3], tl: screenVerts[0] };
         for (const [name, [hx, hy]] of Object.entries(corners)) {
             if (Math.hypot(mx - hx, my - hy) <= HIT_RADIUS) return name;
         }
+    } else if (shape === 'ellipse') {
+        const rightH = [cx + (sw / 2) * cosA, cy + (sw / 2) * sinA];
+        const botH   = [cx - (sh / 2) * sinA, cy + (sh / 2) * cosA];
+        if (Math.hypot(mx - rightH[0], my - rightH[1]) <= HIT_RADIUS) return 'edgeW';
+        if (Math.hypot(mx - botH[0],   my - botH[1])   <= HIT_RADIUS) return 'edgeH';
     } else {
         for (let i = 0; i < screenVerts.length; i++) {
             if (Math.hypot(mx - screenVerts[i][0], my - screenVerts[i][1]) <= HIT_RADIUS) return `v${i}`;
@@ -338,18 +343,18 @@ export function onDragShapeSticker(e, inst, rect) {
         const dx  = mx - cx, dy = my - cy;
         const lx  =  dx * cosA + dy * sinA;
         const ly  = -dx * sinA + dy * cosA;
-        setInstanceParam(state.instId, `shapeStickerV${idx}x`, Math.round(Math.max(-50, Math.min(50, lx / W * 100)) * 100) / 100);
-        setInstanceParam(state.instId, `shapeStickerV${idx}y`, Math.round(Math.max(-50, Math.min(50, -ly / H * 100)) * 100) / 100);
+        setInstanceParam(state.instId, `shapeStickerV${idx}x`, Math.round(Math.max(-150, Math.min(150, lx / W * 100)) * 100) / 100);
+        setInstanceParam(state.instId, `shapeStickerV${idx}y`, Math.round(Math.max(-150, Math.min(150, -ly / H * 100)) * 100) / 100);
     } else if (state.handle === 'edgeW') {
         const lx = (mx - cx) * cosA + (my - cy) * sinA;
-        setInstanceParam(state.instId, 'shapeStickerW', Math.round(Math.max(1, Math.min(100, Math.abs(lx) * 2 / W * 100))));
+        setInstanceParam(state.instId, 'shapeStickerW', Math.round(Math.max(1, Math.min(300,Math.abs(lx) * 2 / W * 100))));
     } else if (state.handle === 'edgeH') {
         const ly = -(mx - cx) * sinA + (my - cy) * cosA;
-        setInstanceParam(state.instId, 'shapeStickerH', Math.round(Math.max(1, Math.min(100, Math.abs(ly) * 2 / H * 100))));
+        setInstanceParam(state.instId, 'shapeStickerH', Math.round(Math.max(1, Math.min(300,Math.abs(ly) * 2 / H * 100))));
     } else {
         const lx = (mx - cx) * cosA + (my - cy) * sinA;
         const ly = -(mx - cx) * sinA + (my - cy) * cosA;
-        setInstanceParam(state.instId, 'shapeStickerW', Math.round(Math.max(1, Math.min(100, Math.abs(lx) * 2 / W * 100))));
-        setInstanceParam(state.instId, 'shapeStickerH', Math.round(Math.max(1, Math.min(100, Math.abs(ly) * 2 / H * 100))));
+        setInstanceParam(state.instId, 'shapeStickerW', Math.round(Math.max(1, Math.min(300,Math.abs(lx) * 2 / W * 100))));
+        setInstanceParam(state.instId, 'shapeStickerH', Math.round(Math.max(1, Math.min(300,Math.abs(ly) * 2 / H * 100))));
     }
 }

@@ -1,4 +1,8 @@
 import { canvas } from '../renderer/glstate.js';
+import { buildFadeControl, buildBlendControl } from './controls/index.js';
+
+const fade  = buildFadeControl('shapeSticker');
+const blend = buildBlendControl('shapeSticker');
 
 const SOLID_COLORS = {
     'r': '#ff0000', 'g': '#00ff00', 'b': '#0000ff',
@@ -60,7 +64,7 @@ function getLocalBoundingBox(verts) {
     return { minX, minY, maxX, maxY };
 }
 
-function applyShapeSticker(ctx, p) {
+function applyShapeSticker(ctx, p, srcCanvas) {
     const w = canvas.width;
     const h = canvas.height;
 
@@ -115,7 +119,8 @@ function applyShapeSticker(ctx, p) {
         const rows = Math.ceil(warpH / grainSize);
         let sourcePixels = null;
         if (staticType === 'image-color-static') {
-            sourcePixels = ctx.getImageData(0, 0, w, h);
+            const readCtx = srcCanvas ? srcCanvas.getContext('2d') : ctx;
+            sourcePixels = readCtx.getImageData(0, 0, w, h);
         }
         const imgData = warpCtx.createImageData(warpW, warpH);
         const data = imgData.data;
@@ -207,6 +212,8 @@ export const shapeStickerEffect = {
     name: 'shapeSticker',
     label: 'Shape Sticker',
     pass: 'context',
+    blendPrefix: 'shapeSticker',
+    bindUniforms: (gl, prog, p) => { fade.bindUniforms(gl, prog, p); blend.bindUniforms(gl, prog, p); },
     paramKeys: [
         'shapeStickerX', 'shapeStickerY', 'shapeStickerW', 'shapeStickerH', 'shapeStickerAngle',
         'shapeStickerShape', 'shapeStickerSides',
@@ -215,18 +222,22 @@ export const shapeStickerEffect = {
         'shapeStickerGrabX', 'shapeStickerGrabY', 'shapeStickerGrabW', 'shapeStickerGrabH',
         'shapeStickerGrabAngle', 'shapeStickerGrabMode',
         ...Array.from({ length: 24 }, (_, i) => [`shapeStickerV${i}x`, `shapeStickerV${i}y`]).flat(),
+        ...fade.paramKeys,
+        ...blend.paramKeys,
     ],
     handleParams: [
         'shapeStickerX', 'shapeStickerY', 'shapeStickerW', 'shapeStickerH', 'shapeStickerAngle',
         ...Array.from({ length: 24 }, (_, i) => [`shapeStickerV${i}x`, `shapeStickerV${i}y`]).flat(),
         'shapeStickerGrabX', 'shapeStickerGrabY', 'shapeStickerGrabW', 'shapeStickerGrabH', 'shapeStickerGrabAngle',
+        ...fade.handleParams,
     ],
+    overlays: { fade: fade.overlay },
     params: {
         shapeStickerEnabled:    { default: false, label: 'Enable' },
         shapeStickerX:          { default: 0,  min: -50,  max: 50,  label: 'Center X' },
         shapeStickerY:          { default: 0,  min: -50,  max: 50,  label: 'Center Y' },
-        shapeStickerW:          { default: 30, min: 1,    max: 100, label: 'Width' },
-        shapeStickerH:          { default: 30, min: 1,    max: 100, label: 'Height' },
+        shapeStickerW:          { default: 30, min: 1,    max: 300, label: 'Width' },
+        shapeStickerH:          { default: 30, min: 1,    max: 300, label: 'Height' },
         shapeStickerAngle:      { default: 0,  min: -180, max: 180, label: 'Angle' },
         shapeStickerShape:      { default: 'rectangle', label: 'Shape', options: [['rectangle', 'Rectangle'], ['ellipse', 'Ellipse'], ['triangle', 'Triangle'], ['polygon', 'Polygon']] },
         shapeStickerSides:      { default: 6,  min: 3,    max: 24,  label: 'Sides' },
@@ -245,6 +256,8 @@ export const shapeStickerEffect = {
             [`shapeStickerV${i}x`]: { default: 0 },
             [`shapeStickerV${i}y`]: { default: 0 },
         })).reduce((acc, obj) => ({ ...acc, ...obj }), {}),
+        ...fade.params,
+        ...blend.params,
     },
     enabled: (p) => p.shapeStickerEnabled,
     uiGroups: (p) => {
@@ -266,6 +279,8 @@ export const shapeStickerEffect = {
                 keys: ['shapeStickerGrabX', 'shapeStickerGrabY', 'shapeStickerGrabW', 'shapeStickerGrabH', 'shapeStickerGrabAngle', 'shapeStickerGrabMode'],
             });
         }
+        groups.push(fade.uiGroup);
+        groups.push(blend.uiGroup);
         return groups;
     },
     canvas2d: applyShapeSticker,

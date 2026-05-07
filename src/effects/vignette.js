@@ -44,7 +44,6 @@ uniform int   vignetteMode;
 ${blend.glsl}
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     float a = max((vignetteMajor / 100.0) * 0.7071, 1e-5);
     float b = max((vignetteMinor / 100.0) * 0.7071, 1e-5);
     float centerUX = 0.5 + vignetteCenterX / 100.0;
@@ -62,6 +61,7 @@ void main() {
     float edgeFactor   = max(0.0, 1.0 + falloff * (vignetteEdge   / 100.0));
     float centerFactor = max(0.0, 1.0 + (1.0 - falloff) * (vignetteCenter / 100.0));
     vec3 adjusted = clamp(c.rgb * edgeFactor * centerFactor, 0.0, 1.0);
+    if (!${blend.thresholdFn}(c, vec4(adjusted, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, adjusted), c.a);
 }
 `,

@@ -33,7 +33,6 @@ float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453
 
 void main() {
     vec4 c = texture(uTex, vUV);
-    if (!${blend.thresholdFn}(c)) { fragColor = c; return; }
     float intensity = grainIntensity / 100.0 * 150.0;
     float gs = max(1.0, grainSize);
     vec2 cellUV = floor(vUV * uResolution / gs) * gs / uResolution;
@@ -41,6 +40,7 @@ void main() {
     float weight  = ${fade.fnName}();
     vec3 adjusted = clamp(c.rgb * 255.0 + noise, 0.0, 255.0) / 255.0;
     vec3 faded    = mix(c.rgb, adjusted, weight);
+    if (!${blend.thresholdFn}(c, vec4(faded, c.a))) { fragColor = c; return; }
     fragColor = vec4(${blend.blendFn}(c.rgb, faded), c.a);
 }
 `,
