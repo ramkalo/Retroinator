@@ -15,10 +15,14 @@ const NAMED_TEXT_COLORS = {
 };
 
 const BG_COLORS = {
-    black:         'rgba(0,0,0,0.88)',
-    white:         'rgba(255,255,255,0.88)',
-    'semi-black':  'rgba(0,0,0,0.45)',
-    'semi-white':  'rgba(255,255,255,0.45)',
+    black:   '#000000',
+    white:   '#ffffff',
+    red:     '#ff4444',
+    green:   '#44ff44',
+    blue:    '#4488ff',
+    cyan:    '#00ffff',
+    yellow:  '#ffff00',
+    magenta: '#ff44ff',
 };
 
 function seededRandom(seed, idx) {
@@ -66,7 +70,7 @@ function wrapLine(ctx, text, maxW) {
 
 export function applyText(ctx, p, srcCanvas) {
     const opacity = p.textCharAlpha ?? 1;
-    
+
     const W = ctx.canvas.width;
     const H = ctx.canvas.height;
 
@@ -89,7 +93,6 @@ export function applyText(ctx, p, srcCanvas) {
     ctx.save();
     ctx.font = `${variant}${size}px ${p.textFont ?? "'JetBrains Mono', monospace"}`;
     ctx.textBaseline = 'top';
-    ctx.lineWidth    = Math.max(1, size * 0.04);
 
     // Word-wrap using top-edge width as the reference (measureText ignores transforms)
     const rawLines = (p.text ?? '').split('\n');
@@ -108,13 +111,18 @@ export function applyText(ctx, p, srcCanvas) {
     else if (va === 'bottom') startY = th - totalH;
 
     const colorKey    = p.textColor ?? 'white';
-    const strokeColor = (colorKey === 'black') ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
     const seed        = p.textNoiseSeed ?? 0;
     const palette     = colorKey === 'paletteNoise' ? samplePalette(srcCanvas ? srcCanvas.getContext('2d') : ctx, seed) : null;
     let   noiseIdx    = 0;
 
+    const outlineW    = p.textOutlineWidth ?? 2;
+    const outlineKey  = p.textOutlineColor ?? 'auto';
+    let   outNoiseIdx = 1000000; // separate noise counter for outline color
+
     // Background: fill the actual quad shape
     if (p.textBg && p.textBg !== 'none' && BG_COLORS[p.textBg]) {
+        ctx.save();
+        ctx.globalAlpha = p.textBgOpacity ?? 0.88;
         ctx.fillStyle = BG_COLORS[p.textBg];
         ctx.beginPath();
         ctx.moveTo(tlx, tly);
@@ -123,24 +131,29 @@ export function applyText(ctx, p, srcCanvas) {
         ctx.lineTo(blx, bly);
         ctx.closePath();
         ctx.fill();
+        ctx.restore();
     }
 
     ctx.globalAlpha = opacity;
-    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth   = outlineW;
 
     // Rubber-sheet rendering: per-character bilinear Jacobian transform.
     // For each character at source position (u, v), the Jacobian of the bilinear
     // quad map gives the correct shear+scale to deform glyphs like a rubber sheet.
-    const align = p.textAlign ?? 'left';
+    const align   = p.textAlign ?? 'left';
+    const kerning = p.textKerning ?? 0;
+    const reverse = p.textReverse ?? false;
 
     for (let i = 0; i < lines.length; i++) {
         const line  = lines[i];
         const lineY = startY + i * lineH;
         const v     = lineY / th;
 
-        const chars  = [...line];
+        let chars  = [...line];
+        if (reverse) chars.reverse();
         const widths = chars.map(ch => ctx.measureText(ch).width);
-        const lineW  = widths.reduce((s, w) => s + w, 0);
+        const lineW  = widths.reduce((s, w) => s + w, 0)
+                     + Math.max(0, chars.length - 1) * kerning;
 
         let charX = 0;
         let justifyGap = 0;
@@ -174,15 +187,21 @@ export function applyText(ctx, p, srcCanvas) {
             const dPdv_x = (1 - u) * (blx - tlx) + u * (brx - trx);
             const dPdv_y = (1 - u) * (bly - tly) + u * (bry - try_);
 
+            const fillColor = resolveTextColor(colorKey, () => seededRandom(seed, noiseIdx++), palette);
+            const strokeColor = outlineKey === 'auto'
+                ? ((colorKey === 'black') ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)')
+                : resolveTextColor(outlineKey, () => seededRandom(seed, outNoiseIdx++), palette);
+
             ctx.save();
-            ctx.fillStyle = resolveTextColor(colorKey, () => seededRandom(seed, noiseIdx++), palette);
+            ctx.fillStyle   = fillColor;
+            ctx.strokeStyle = strokeColor;
             ctx.transform(
                 dPdu_x / tw,  dPdu_y / tw,
                 dPdv_x / th,  dPdv_y / th,
                 ox, oy
             );
 
-            ctx.strokeText(ch, 0, 0);
+            if (outlineW > 0) ctx.strokeText(ch, 0, 0);
             ctx.fillText(ch, 0, 0);
             if (p.textStrike) {
                 ctx.fillRect(0, size * 0.42, charW, Math.max(1, size * 0.06));
@@ -190,7 +209,7 @@ export function applyText(ctx, p, srcCanvas) {
 
             ctx.restore();
 
-            charX += charW;
+            charX += charW + kerning;
             if (isJustify && ch === ' ') charX += justifyGap;
         }
     }
@@ -206,7 +225,9 @@ export const textEffect = {
     bindUniforms: (gl, prog, p) => { fade.bindUniforms(gl, prog, p); blend.bindUniforms(gl, prog, p); },
     paramKeys: [
         'text', 'textFont', 'textSize', 'textBold', 'textItalic', 'textStrike', 'textLineHeight',
-        'textColor', 'textBg',
+        'textReverse', 'textKerning',
+        'textColor', 'textBg', 'textBgOpacity',
+        'textOutlineWidth', 'textOutlineColor',
         'textWrap', 'textAlign', 'textVAlign',
         'textTLx', 'textTLy', 'textTRx', 'textTRy',
         'textBRx', 'textBRy', 'textBLx', 'textBLy',
@@ -237,6 +258,8 @@ export const textEffect = {
         textItalic:     { default: false, label: 'Italic' },
         textStrike:     { default: false, label: 'Strikethrough' },
         textLineHeight: { default: 1.2, min: 0.5, max: 3, step: 0.1, label: 'Line Height' },
+        textReverse:    { default: false, label: 'Reverse' },
+        textKerning:    { default: 0, min: -50, max: 200, step: 1, label: 'Kerning' },
         textColor:          { default: 'white', label: 'Color', options: [
             ['white','White'], ['black','Black'],
             ['red','Red'], ['green','Green'], ['blue','Blue'],
@@ -246,11 +269,22 @@ export const textEffect = {
         ] },
         textNoiseSeed:      { default: 0 },
         textNoiseRandomize: { default: null, label: 'Randomize' },
-        textCharAlpha:        { default: 1, min: 0, max: 1, step: 0.01 },
+        textCharAlpha:      { default: 1, min: 0, max: 1, step: 0.01, label: 'Text Opacity' },
+        textOutlineWidth:   { default: 2, min: 0, max: 20, step: 0.5, label: 'Outline' },
+        textOutlineColor:   { default: 'auto', label: 'Outline Color', options: [
+            ['auto','Auto'],
+            ['white','White'], ['black','Black'],
+            ['red','Red'], ['green','Green'], ['blue','Blue'],
+            ['cyan','Cyan'], ['yellow','Yellow'], ['magenta','Magenta'],
+            ['greyNoise','Grey Noise'], ['colorNoise','Color Noise'],
+            ['paletteNoise','Image Palette'],
+        ] },
         textBg:         { default: 'none', label: 'Background', options: [
             ['none','None'], ['black','Black'], ['white','White'],
-            ['semi-black','Semi Black'], ['semi-white','Semi White'],
+            ['red','Red'], ['green','Green'], ['blue','Blue'],
+            ['cyan','Cyan'], ['yellow','Yellow'], ['magenta','Magenta'],
         ] },
+        textBgOpacity:  { default: 0.88, min: 0, max: 1, step: 0.01, label: 'BG Opacity' },
         textWrap:       { default: true,     label: 'Word Wrap' },
         textAlign:      { default: 'center', label: 'Justify', options: [['left','Left'], ['center','Center'], ['right','Right'], ['justify','Justify']] },
         textVAlign:     { default: 'middle', label: 'V-Align', options: [['top','Top'], ['middle','Middle'], ['bottom','Bottom']] },
@@ -270,8 +304,8 @@ export const textEffect = {
     },
     enabled: (p) => p.textEnabled && !!p.text,
     uiGroups: [
-        { keys: ['text', 'textFont', 'textSize', 'textBold', 'textItalic', 'textStrike', 'textLineHeight'] },
-        { label: 'Color', keys: ['textColor', 'textNoiseRandomize', 'textBg', 'textCharAlpha'] },
+        { keys: ['text', 'textFont', 'textSize', 'textBold', 'textItalic', 'textStrike', 'textLineHeight', 'textReverse', 'textKerning'] },
+        { label: 'Color', keys: ['textColor', 'textNoiseRandomize', 'textCharAlpha', 'textOutlineWidth', 'textOutlineColor', 'textBg', 'textBgOpacity'] },
         { label: 'Layout', keys: ['textWrap', 'textAlign', 'textVAlign', 'textBoxReset'] },
         fade.uiGroup,
         blend.uiGroup,

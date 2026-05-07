@@ -17,7 +17,12 @@ export function textCorners(p, W, H) {
     const botMidX = (blx + brx) / 2, botMidY = (bly + bry) / 2;
     if (rpx * (botMidX - topMidX) + rpy * (botMidY - topMidY) > 0) { rpx = -rpx; rpy = -rpy; }
     const rhx = topMidX + 22 * rpx, rhy = topMidY + 22 * rpy;
-    return { tlx, tly, trx, try_, brx, bry, blx, bly, cx, cy, topMidX, topMidY, rhx, rhy };
+    const rightMidX  = (trx + brx) / 2, rightMidY  = (try_ + bry) / 2;
+    const bottomMidX = (brx + blx) / 2, bottomMidY = (bry + bly) / 2;
+    const leftMidX   = (blx + tlx) / 2, leftMidY   = (bly + tly) / 2;
+    return { tlx, tly, trx, try_, brx, bry, blx, bly, cx, cy,
+             topMidX, topMidY, rhx, rhy,
+             rightMidX, rightMidY, bottomMidX, bottomMidY, leftMidX, leftMidY };
 }
 
 export function drawTextOverlay(p) {
@@ -25,7 +30,9 @@ export function drawTextOverlay(p) {
     const W = uiOverlay.width, H = uiOverlay.height;
     uiCtx.clearRect(0, 0, W, H);
 
-    const { tlx, tly, trx, try_, brx, bry, blx, bly, cx, cy, topMidX, topMidY, rhx, rhy } = textCorners(p, W, H);
+    const { tlx, tly, trx, try_, brx, bry, blx, bly, cx, cy,
+            topMidX, topMidY, rhx, rhy,
+            rightMidX, rightMidY, bottomMidX, bottomMidY, leftMidX, leftMidY } = textCorners(p, W, H);
 
     uiCtx.strokeStyle = 'rgba(255,255,255,0.55)';
     uiCtx.lineWidth   = 1.5;
@@ -52,6 +59,11 @@ export function drawTextOverlay(p) {
     drawCornerHandle(brx, bry);
     drawCornerHandle(blx, bly);
     drawHandle(cx, cy);
+
+    drawHandle(topMidX,    topMidY);
+    drawHandle(rightMidX,  rightMidY);
+    drawHandle(bottomMidX, bottomMidY);
+    drawHandle(leftMidX,   leftMidY);
 
     if (p[state.enabledKey]) {
         const shape  = p[state.shapeKey] ?? 'ellipse';
@@ -114,7 +126,8 @@ export function hitTestText(e) {
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     const W = uiOverlay.width, H = uiOverlay.height;
     const p = inst.params;
-    const { tlx, tly, trx, try_, brx, bry, blx, bly, cx, cy, rhx, rhy } = textCorners(p, W, H);
+    const { tlx, tly, trx, try_, brx, bry, blx, bly, cx, cy, rhx, rhy,
+            topMidX, topMidY, rightMidX, rightMidY, bottomMidX, bottomMidY, leftMidX, leftMidY } = textCorners(p, W, H);
     const d = (ax, ay) => Math.hypot(mx - ax, my - ay);
 
     if (d(rhx, rhy)  <= HIT_RADIUS) return 'rot';
@@ -123,6 +136,10 @@ export function hitTestText(e) {
     if (d(brx, bry)  <= HIT_RADIUS) return 'br';
     if (d(blx, bly)  <= HIT_RADIUS) return 'bl';
     if (d(cx,  cy)   <= HIT_RADIUS) return 'center';
+    if (d(topMidX,    topMidY)    <= HIT_RADIUS) return 'topEdge';
+    if (d(rightMidX,  rightMidY)  <= HIT_RADIUS) return 'rightEdge';
+    if (d(bottomMidX, bottomMidY) <= HIT_RADIUS) return 'bottomEdge';
+    if (d(leftMidX,   leftMidY)   <= HIT_RADIUS) return 'leftEdge';
 
     if (p[state.enabledKey]) {
         const fAngle  = (p[state.angleKey] ?? 0) * Math.PI / 180;
@@ -198,6 +215,34 @@ export function onDragText(e, inst, rect) {
     } else if (state.handle === 'bl') {
         setInstanceParam(state.instId, 'textBLx', toP(mx, W));
         setInstanceParam(state.instId, 'textBLy', toP(my, H));
+    } else if (state.handle === 'topEdge' && state.dragAnchor) {
+        const dx = toP(mx - state.dragAnchor.startX, W);
+        const dy = toP(my - state.dragAnchor.startY, H);
+        setInstanceParam(state.instId, 'textTLx', state.dragAnchor.tlx0 + dx);
+        setInstanceParam(state.instId, 'textTLy', state.dragAnchor.tly0 + dy);
+        setInstanceParam(state.instId, 'textTRx', state.dragAnchor.trx0 + dx);
+        setInstanceParam(state.instId, 'textTRy', state.dragAnchor.try0 + dy);
+    } else if (state.handle === 'rightEdge' && state.dragAnchor) {
+        const dx = toP(mx - state.dragAnchor.startX, W);
+        const dy = toP(my - state.dragAnchor.startY, H);
+        setInstanceParam(state.instId, 'textTRx', state.dragAnchor.trx0 + dx);
+        setInstanceParam(state.instId, 'textTRy', state.dragAnchor.try0 + dy);
+        setInstanceParam(state.instId, 'textBRx', state.dragAnchor.brx0 + dx);
+        setInstanceParam(state.instId, 'textBRy', state.dragAnchor.bry0 + dy);
+    } else if (state.handle === 'bottomEdge' && state.dragAnchor) {
+        const dx = toP(mx - state.dragAnchor.startX, W);
+        const dy = toP(my - state.dragAnchor.startY, H);
+        setInstanceParam(state.instId, 'textBRx', state.dragAnchor.brx0 + dx);
+        setInstanceParam(state.instId, 'textBRy', state.dragAnchor.bry0 + dy);
+        setInstanceParam(state.instId, 'textBLx', state.dragAnchor.blx0 + dx);
+        setInstanceParam(state.instId, 'textBLy', state.dragAnchor.bly0 + dy);
+    } else if (state.handle === 'leftEdge' && state.dragAnchor) {
+        const dx = toP(mx - state.dragAnchor.startX, W);
+        const dy = toP(my - state.dragAnchor.startY, H);
+        setInstanceParam(state.instId, 'textTLx', state.dragAnchor.tlx0 + dx);
+        setInstanceParam(state.instId, 'textTLy', state.dragAnchor.tly0 + dy);
+        setInstanceParam(state.instId, 'textBLx', state.dragAnchor.blx0 + dx);
+        setInstanceParam(state.instId, 'textBLy', state.dragAnchor.bly0 + dy);
     } else if (state.handle === 'fadeCenter') {
         setInstanceParam(state.instId, 'textFadeX', Math.round(Math.max(-50, Math.min(50,  (mx / W - 0.5) * 100))));
         setInstanceParam(state.instId, 'textFadeY', Math.round(Math.max(-50, Math.min(50, -(my / H - 0.5) * 100))));

@@ -122,6 +122,7 @@ export function buildBlendControl(prefix, defaults = {}) {
         ],
         uiGroup: {
             label: 'Blend',
+            conditionKey: `${p}BlendEnabled`,
             keys: [`${p}BlendEnabled`, `${p}BlendMode`, `${p}Opacity`, `${p}Threshold`, `${p}ThresholdTarget`, `${p}ThresholdReverse`, `${p}ThresholdOnDest`],
         },
         bindUniforms(gl, prog, params) {

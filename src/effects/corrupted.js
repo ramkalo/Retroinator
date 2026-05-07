@@ -297,6 +297,8 @@ export default {
 uniform sampler2D uChunkTex;
 uniform sampler2D uColorTex;
 uniform float corruptedChunkSize;
+uniform float corruptedOffsetCX;
+uniform float corruptedOffsetCY;
 uniform int   corruptedIsStatic;
 uniform int   corruptedIsGlitched;
 ${fade.glsl}
@@ -311,8 +313,10 @@ void main() {
 
     float px = vUV.x * uResolution.x;
     float py = (1.0 - vUV.y) * uResolution.y;
-    float cx = floor(px / corruptedChunkSize);
-    float cy = floor(py / corruptedChunkSize);
+    float cx = floor(px / corruptedChunkSize) - corruptedOffsetCX;
+    float cy = floor(py / corruptedChunkSize) - corruptedOffsetCY;
+
+    if (cx < 0.0 || cx >= chunkW || cy < 0.0 || cy >= chunkH) { fragColor = c; return; }
 
     float u = (cx + 0.5) / chunkW;
     float v = (cy + 0.5) / chunkH;
@@ -365,7 +369,7 @@ const _gpuCache = { key: null, srcTex: null, chunkTex: null, colorTex: null };
 
 function corruptedCacheKey(p, w, h) {
     return [p.corruptedSeed, p.corruptedPattern, p.corruptedSeeds, p.corruptedInfect,
-            p.corruptedChunkSize, p.corruptedCluster, p.corruptedX, p.corruptedY,
+            p.corruptedChunkSize, p.corruptedCluster,
             p.corruptedColor, p.corruptedColorMode, w, h].join(',');
 }
 
@@ -384,8 +388,8 @@ function buildChunkMapGPU(p, imgW, imgH) {
     const chunkH    = Math.ceil(imgH / chunkSize);
     const chunkMap  = new Int16Array(chunkW * chunkH).fill(-1);
     const rng       = mulberry32(p.corruptedSeed);
-    const centerX   = (0.5 + p.corruptedX / 100) * imgW;
-    const centerY   = (0.5 - p.corruptedY / 100) * imgH;
+    const centerX   = 0.5 * imgW;
+    const centerY   = 0.5 * imgH;
     const clusterR  = p.corruptedCluster / 100 * Math.min(imgW, imgH) * 2;
     const infectRadius = p.corruptedInfect / 100 * Math.max(chunkW, chunkH) * 0.5;
     const seeds     = generateSeeds(p.corruptedSeeds, centerX, centerY, clusterR, chunkSize, rng);
@@ -545,6 +549,11 @@ function corruptedBindUniforms(gl, prog, p, dstW, dstH, srcTex) {
     if (colorLoc != null) { gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, _gpuCache.colorTex); gl.uniform1i(colorLoc, 2); }
     if (statLoc  != null) { gl.uniform1i(statLoc, p.corruptedColor === 'static' ? 1 : p.corruptedColor === 'color-static' ? 2 : 0); }
     if (glitLoc  != null) { gl.uniform1i(glitLoc, (p.corruptedColorMode ?? 'per-chunk') === 'glitched' ? 1 : 0); }
+    const chunkSize   = Math.max(1, p.corruptedChunkSize);
+    const offsetCXLoc = prog._locs['corruptedOffsetCX'];
+    const offsetCYLoc = prog._locs['corruptedOffsetCY'];
+    if (offsetCXLoc != null) gl.uniform1f(offsetCXLoc,  (p.corruptedX / 100) * dstW / chunkSize);
+    if (offsetCYLoc != null) gl.uniform1f(offsetCYLoc, -(p.corruptedY / 100) * dstH / chunkSize);
     fade.bindUniforms(gl, prog, p);
     blend.bindUniforms(gl, prog, p);
 }

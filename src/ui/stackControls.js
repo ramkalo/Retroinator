@@ -30,6 +30,14 @@ export function buildEffectBody(inst, onRebuild) {
             header.textContent = group.label;
             content.appendChild(header);
         }
+
+        const condKey = group.conditionKey;
+        let subWrapper = null;
+        if (condKey) {
+            subWrapper = document.createElement('div');
+            subWrapper.style.display = inst.params[condKey] ? '' : 'none';
+        }
+
         for (const key of group.keys) {
             if (key === enabledKey) continue;
             if (key === 'rotate180' || key === 'rotate270') continue;
@@ -37,7 +45,20 @@ export function buildEffectBody(inst, onRebuild) {
             const schema = effect.params[key];
             if (!schema) continue;
             const controlEl = buildControl(inst, key, schema, onRebuild, group.labels?.[key]);
-            if (controlEl) content.appendChild(controlEl);
+            if (!controlEl) continue;
+
+            if (condKey && key !== condKey) {
+                subWrapper.appendChild(controlEl);
+            } else {
+                content.appendChild(controlEl);
+                if (condKey && key === condKey) {
+                    const chk = controlEl.querySelector('input[type="checkbox"]');
+                    if (chk) chk.addEventListener('change', () => {
+                        subWrapper.style.display = chk.checked ? '' : 'none';
+                    });
+                    content.appendChild(subWrapper);
+                }
+            }
         }
     }
 
@@ -301,7 +322,7 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
             const tsBtn = document.createElement('button');
             tsBtn.className = 'btn';
             tsBtn.textContent = 'Timestamp';
-            tsBtn.style.cssText = 'padding:2px 8px;font-size:0.7rem;margin-top:4px;';
+            tsBtn.style.cssText = 'padding:2px 8px;font-size:0.7rem;margin-top:4px;width:fit-content;';
             tsBtn.addEventListener('click', () => {
                 const now = new Date();
                 const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];

@@ -391,8 +391,9 @@ function onDown(e) {
         }
     }
 
-    // Special dragAnchor setup for text center/rot drags
-    if (state.mode === 'text' && (h === 'center' || h === 'rot')) {
+    // Special dragAnchor setup for text center/rot/edge drags
+    if (state.mode === 'text' && (h === 'center' || h === 'rot'
+        || h === 'topEdge' || h === 'rightEdge' || h === 'bottomEdge' || h === 'leftEdge')) {
         const rect2 = canvas.getBoundingClientRect();
         const inst2 = getStack().find(i => i.id === state.instId);
         const p2    = inst2?.params ?? {};

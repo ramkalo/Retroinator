@@ -63,6 +63,7 @@ export function buildFadeControl(prefix, defaults = {}) {
         handleParams: [`${p}FadeX`, `${p}FadeY`, `${p}FadeW`, `${p}FadeH`, `${p}FadeAngle`],
         uiGroup: {
             label: 'Fade',
+            conditionKey: `${p}FadeEnabled`,
             keys: [`${p}FadeEnabled`, `${p}FadeShape`, `${p}Fade`, `${p}FadeSlope`, `${p}FadeInvert`],
         },
         overlay: {
