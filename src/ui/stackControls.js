@@ -139,6 +139,8 @@ export function buildEffectBody(inst, onRebuild) {
         const colorCGroup  = colorCSelect?.closest('.control-group');
         const colorDSelect = content.querySelector('[data-inst-param="invertColorD"]');
         const colorDGroup  = colorDSelect?.closest('.control-group');
+        const colorESelect = content.querySelector('[data-inst-param="invertColorE"]');
+        const colorEGroup  = colorESelect?.closest('.control-group');
 
         const swapBCRow = document.createElement('div');
         swapBCRow.className = 'control-group';
@@ -170,26 +172,22 @@ export function buildEffectBody(inst, onRebuild) {
         if (colorCGroup) colorCGroup.after(swapCDRow);
         else content.appendChild(swapCDRow);
 
-        const randomizeRow = document.createElement('div');
-        randomizeRow.className = 'control-group';
-        randomizeRow.innerHTML = `<div class="control-row"><button class="btn">⚄ Randomize Colors</button></div>`;
-        const randomizeBtn = randomizeRow.querySelector('button');
-        randomizeBtn.addEventListener('click', () => {
-            const palette = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
-            for (let i = palette.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [palette[i], palette[j]] = [palette[j], palette[i]];
-            }
+        const swapDERow = document.createElement('div');
+        swapDERow.className = 'control-group';
+        swapDERow.innerHTML = `<div class="control-row"><button class="btn">⇄ Swap D / E</button></div>`;
+        const swapDEBtn = swapDERow.querySelector('button');
+        swapDEBtn.addEventListener('click', () => {
             saveState();
-            setInstanceParam(inst.id, 'invertColorA', palette[0]);
-            setInstanceParam(inst.id, 'invertColorB', palette[1]);
-            setInstanceParam(inst.id, 'invertColorC', Math.random() < 0.5 ? palette[2] : 'none');
-            setInstanceParam(inst.id, 'invertColorD', Math.random() < 0.5 ? palette[3] : 'none');
+            const d = inst.params.invertColorD;
+            const e = inst.params.invertColorE;
+            setInstanceParam(inst.id, 'invertColorD', e === 'none' ? d : e);
+            setInstanceParam(inst.id, 'invertColorE', d);
             if (onRebuild) onRebuild();
         });
-        if (colorDGroup) colorDGroup.after(randomizeRow);
-        else content.appendChild(randomizeRow);
+        if (colorDGroup) colorDGroup.after(swapDERow);
+        else content.appendChild(swapDERow);
 
+        // --- colour helpers (used by swatches and stops slider) ---
         const namedHex = {
             r:'#ff0000', g:'#00ff00', b:'#0000ff',
             c:'#00ffff', y:'#ffff00', m:'#ff00ff',
@@ -215,6 +213,125 @@ export function buildEffectBody(inst, onRebuild) {
             }
             return null;
         };
+
+        // --- stop-positions slider ---
+        const STOP_DEFS = [
+            { posKey: 'invertPosA', colorKey: 'invertColorA', label: 'A', defaultPos: 0    },
+            { posKey: 'invertPosC', colorKey: 'invertColorC', label: 'C', defaultPos: 0.25 },
+            { posKey: 'invertPosD', colorKey: 'invertColorD', label: 'D', defaultPos: 0.5  },
+            { posKey: 'invertPosE', colorKey: 'invertColorE', label: 'E', defaultPos: 0.75 },
+            { posKey: 'invertPosB', colorKey: 'invertColorB', label: 'B', defaultPos: 1    },
+        ];
+        const getStopPos  = (i) => inst.params[STOP_DEFS[i].posKey] ?? STOP_DEFS[i].defaultPos;
+        const isStopActive = (i) => i === 0 || i === 4 || inst.params[STOP_DEFS[i].colorKey] !== 'none';
+
+        const sliderGroup = document.createElement('div');
+        sliderGroup.className = 'control-group';
+        const sliderRow = document.createElement('div');
+        sliderRow.className = 'control-row';
+        sliderRow.style.cssText = 'flex-direction:column;align-items:stretch;gap:2px;';
+
+        const sliderLabel = document.createElement('span');
+        sliderLabel.className = 'control-label';
+        sliderLabel.textContent = 'Stop Positions';
+
+        const trackWrap = document.createElement('div');
+        trackWrap.style.cssText = 'position:relative;height:20px;margin:4px 6px;';
+
+        const trackBg = document.createElement('div');
+        trackBg.style.cssText = 'position:absolute;inset:0;border-radius:4px;border:1px solid var(--border);pointer-events:none;';
+        trackWrap.appendChild(trackBg);
+
+        const handles = STOP_DEFS.map((def, i) => {
+            const h = document.createElement('div');
+            h.style.cssText = 'position:absolute;top:-2px;width:12px;height:24px;transform:translateX(-50%);border-radius:3px;border:2px solid rgba(255,255,255,0.5);cursor:ew-resize;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;user-select:none;box-sizing:border-box;';
+            h.textContent = def.label;
+            trackWrap.appendChild(h);
+            return h;
+        });
+
+        const updateSlider = () => {
+            const gradParts = [];
+            for (let i = 0; i < 5; i++) {
+                if (!isStopActive(i)) continue;
+                const hex = resolveInvertHex(inst.params[STOP_DEFS[i].colorKey]) ?? '#808080';
+                gradParts.push(`${hex} ${(getStopPos(i) * 100).toFixed(1)}%`);
+            }
+            trackBg.style.background = gradParts.length > 1
+                ? `linear-gradient(to right, ${gradParts.join(', ')})`
+                : 'var(--bg-2)';
+
+            for (let i = 0; i < 5; i++) {
+                const active = isStopActive(i);
+                handles[i].style.display = active ? 'flex' : 'none';
+                if (!active) continue;
+                handles[i].style.left = `${getStopPos(i) * 100}%`;
+                const hex = resolveInvertHex(inst.params[STOP_DEFS[i].colorKey]) ?? '#808080';
+                const fg  = contrastColor(hex);
+                handles[i].style.backgroundColor = hex;
+                handles[i].style.color = fg;
+                handles[i].style.borderColor = fg === '#000000' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)';
+            }
+        };
+
+        for (let i = 0; i < 5; i++) {
+            let dragging = false;
+            handles[i].addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                handles[i].setPointerCapture(e.pointerId);
+                saveState();
+                dragging = true;
+            });
+            handles[i].addEventListener('pointermove', (e) => {
+                if (!dragging) return;
+                const rect = trackWrap.getBoundingClientRect();
+                let newPos = (e.clientX - rect.left) / rect.width;
+                let lo = 0, hi = 1;
+                for (let j = i - 1; j >= 0; j--) {
+                    if (isStopActive(j)) { lo = getStopPos(j) + 0.02; break; }
+                }
+                for (let j = i + 1; j < 5; j++) {
+                    if (isStopActive(j)) { hi = getStopPos(j) - 0.02; break; }
+                }
+                newPos = Math.max(lo, Math.min(hi, newPos));
+                setInstanceParam(inst.id, STOP_DEFS[i].posKey, Math.round(newPos * 1000) / 1000);
+                updateSlider();
+            });
+            handles[i].addEventListener('pointerup',          () => { dragging = false; });
+            handles[i].addEventListener('lostpointercapture', () => { dragging = false; });
+        }
+
+        sliderRow.appendChild(sliderLabel);
+        sliderRow.appendChild(trackWrap);
+        sliderGroup.appendChild(sliderRow);
+
+        if (colorEGroup) colorEGroup.after(sliderGroup);
+        else content.appendChild(sliderGroup);
+
+        updateSlider();
+
+        // --- randomize button ---
+        const randomizeRow = document.createElement('div');
+        randomizeRow.className = 'control-group';
+        randomizeRow.innerHTML = `<div class="control-row"><button class="btn">⚄ Randomize Colors</button></div>`;
+        const randomizeBtn = randomizeRow.querySelector('button');
+        randomizeBtn.addEventListener('click', () => {
+            const palette = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
+            for (let i = palette.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [palette[i], palette[j]] = [palette[j], palette[i]];
+            }
+            saveState();
+            setInstanceParam(inst.id, 'invertColorA', palette[0]);
+            setInstanceParam(inst.id, 'invertColorB', palette[1]);
+            setInstanceParam(inst.id, 'invertColorC', Math.random() < 0.88 ? palette[2] : 'none');
+            setInstanceParam(inst.id, 'invertColorD', Math.random() < 0.88 ? palette[3] : 'none');
+            setInstanceParam(inst.id, 'invertColorE', Math.random() < 0.88 ? palette[4] : 'none');
+            if (onRebuild) onRebuild();
+        });
+        sliderGroup.after(randomizeRow);
+
+        // --- option swatches ---
         const styleColorSelect = (selectEl) => {
             if (!selectEl) return;
             for (const opt of selectEl.options) {
@@ -235,13 +352,14 @@ export function buildEffectBody(inst, onRebuild) {
             swatch.style.backgroundColor = hex ?? 'transparent';
             swatch.style.opacity = hex ? '1' : '0.25';
         };
-        for (const sel of [colorASelect, colorBSelect, colorCSelect, colorDSelect]) {
+        for (const sel of [colorASelect, colorBSelect, colorCSelect, colorDSelect, colorESelect]) {
             if (!sel) continue;
             styleColorSelect(sel);
-            sel.addEventListener('change', () => styleColorSelect(sel));
+            sel.addEventListener('change', () => { styleColorSelect(sel); updateSlider(); });
             document.addEventListener('paletteupdate', () => {
                 if (!document.contains(sel)) return;
                 styleColorSelect(sel);
+                updateSlider();
             });
         }
 
@@ -253,9 +371,14 @@ export function buildEffectBody(inst, onRebuild) {
             if (colorCGroup)  colorCGroup.style.opacity = isAll ? '0.4' : '';
             if (colorDSelect) colorDSelect.disabled = isAll;
             if (colorDGroup)  colorDGroup.style.opacity = isAll ? '0.4' : '';
+            if (colorESelect) colorESelect.disabled = isAll;
+            if (colorEGroup)  colorEGroup.style.opacity = isAll ? '0.4' : '';
+            sliderGroup.style.opacity = isAll ? '0.4' : '';
+            sliderGroup.style.pointerEvents = isAll ? 'none' : '';
             swapBtn.disabled = isAll;
             swapBCBtn.disabled = isAll;
             swapCDBtn.disabled = isAll;
+            swapDEBtn.disabled = isAll;
             randomizeBtn.disabled = isAll;
         }
 
