@@ -125,7 +125,10 @@ function isNoiseColor(colorKey) {
     return colorKey === 'greyNoise' || colorKey === 'colorNoise' || colorKey === 'imagePaletteNoise';
 }
 
-function resolveColor(colorKey, x, y, rng, imageCtx) {
+function resolveColor(colorKey, x, y, rng, imageCtx, customPalette) {
+    if (colorKey === 'paletteRandom' && customPalette) return customPalette[Math.floor(rng() * 8)];
+    const palIdx = colorKey.match(/^palette(\d)$/);
+    if (palIdx && customPalette) return customPalette[+palIdx[1]] ?? '#0f0';
     if (NAMED_COLORS[colorKey]) return NAMED_COLORS[colorKey];
     if (colorKey === 'greyNoise') {
         const v = Math.floor(rng() * 256);
@@ -239,7 +242,7 @@ function applyMatrixRain(ctx, p, srcCanvas) {
     ctx.globalAlpha = opacity;
     for (let i = 0; i < totalCells; i++) {
         const [x, y] = cellXY(i);
-        const color = resolveColor(colorKey, x, y, rngColor, imageCtx);
+        const color = resolveColor(colorKey, x, y, rngColor, imageCtx, p._activePalette);
         ctx.fillStyle = color;
         ctx.fillText(chars[i], x, y);
     }
@@ -316,6 +319,10 @@ export const matrixRainEffect = {
             ['colorNoise',          'Color Noise'],
             ['imagePaletteNoise',   'Image Palette Inside'],
             ['imagePaletteRandom',  'Image Palette Noise'],
+            ['palette0','Palette 1'], ['palette1','Palette 2'], ['palette2','Palette 3'],
+            ['palette3','Palette 4'], ['palette4','Palette 5'], ['palette5','Palette 6'],
+            ['palette6','Palette 7'], ['palette7','Palette 8'],
+            ['paletteRandom','Palette Random'],
         ] },
         matrixRainCharOpacity:       { default: 100, min: 0, max: 100, label: 'Opacity' },
         ...fade.params,

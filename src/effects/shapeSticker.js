@@ -105,7 +105,16 @@ function applyShapeSticker(ctx, p, srcCanvas) {
     const warpCtx = warpCanvas.getContext('2d');
 
     if (fillType === 'solid') {
-        const hex = SOLID_COLORS[solidColor] || '#000000';
+        let hex = SOLID_COLORS[solidColor];
+        if (!hex && p._activePalette) {
+            if (solidColor === 'paletteRandom') {
+                hex = p._activePalette[Math.floor(mkRng(staticSeed)() * 8)];
+            } else {
+                const m = solidColor.match(/^palette(\d)$/);
+                if (m) hex = p._activePalette[+m[1]];
+            }
+        }
+        hex = hex || '#000000';
         const rgb = hex.match(/\w{2}/g).map(v => parseInt(v, 16));
         const imgData = warpCtx.createImageData(warpW, warpH);
         const data = imgData.data;
@@ -242,7 +251,13 @@ export const shapeStickerEffect = {
         shapeStickerShape:      { default: 'rectangle', label: 'Shape', options: [['rectangle', 'Rectangle'], ['ellipse', 'Ellipse'], ['triangle', 'Triangle'], ['polygon', 'Polygon']] },
         shapeStickerSides:      { default: 6,  min: 3,    max: 24,  label: 'Sides' },
         shapeStickerFillType:   { default: 'solid', label: 'Fill Type', options: [['solid', 'Solid Color'], ['static', 'Static'], ['image-grab', 'Image Grab']] },
-        shapeStickerSolidColor: { default: 'black', label: 'Solid Color', options: [['r', 'Red'], ['g', 'Green'], ['b', 'Blue'], ['c', 'Cyan'], ['y', 'Yellow'], ['m', 'Magenta'], ['black', 'Black'], ['white', 'White']] },
+        shapeStickerSolidColor: { default: 'black', label: 'Solid Color', options: [
+            ['r', 'Red'], ['g', 'Green'], ['b', 'Blue'], ['c', 'Cyan'], ['y', 'Yellow'], ['m', 'Magenta'], ['black', 'Black'], ['white', 'White'],
+            ['palette0','Palette 1'], ['palette1','Palette 2'], ['palette2','Palette 3'],
+            ['palette3','Palette 4'], ['palette4','Palette 5'], ['palette5','Palette 6'],
+            ['palette6','Palette 7'], ['palette7','Palette 8'],
+            ['paletteRandom','Palette Random'],
+        ] },
         shapeStickerStaticType: { default: 'greyscale', label: 'Static Type', options: [['greyscale', 'Greyscale'], ['random-rgbcym', 'Random RGBYM'], ['image-color-static', 'Image Color Static']] },
         shapeStickerGrainSize:  { default: 4,  min: 1,    max: 50,  label: 'Grain Size' },
         shapeStickerStaticSeed: { default: 1,                        label: 'Seed' },

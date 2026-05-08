@@ -295,11 +295,23 @@ export function blitOriginalToScreen() {
 function _runLinear(stack, startTex) {
     let srcTex = startTex;
     let pingIdx = 0;
+    let activePalette = null;
 
     for (let i = 0; i < stack.length; i++) {
         const instance = stack[i];
         const effect = getEffect(instance.effectName);
-        if (!effect || !effect.enabled(instance.params)) continue;
+
+        // Track the most recent enabled color palette effect for downstream effects
+        if (instance.effectName === 'colorPalette' && instance.params.paletteEnabled) {
+            activePalette = Array.from({ length: 8 }, (_, j) => instance.params[`palette${j}`]);
+        }
+
+        // Merge active palette into render params without mutating instance.params
+        const renderParams = activePalette
+            ? { ...instance.params, _activePalette: activePalette }
+            : instance.params;
+
+        if (!effect || !effect.enabled(renderParams)) continue;
         if (effect.pass === 'viewport') continue;
 
         if (effect.pass === 'transform') {
@@ -310,7 +322,7 @@ function _runLinear(stack, startTex) {
             const curW = fboPool[0]?.width  || canvas.width;
             const curH = fboPool[0]?.height || canvas.height;
             const outDims = effect.getOutputDimensions
-                ? effect.getOutputDimensions(instance.params, curW, curH)
+                ? effect.getOutputDimensions(renderParams, curW, curH)
                 : { w: curW, h: curH };
 
             const needResize = outDims.w !== curW || outDims.h !== curH;
@@ -327,8 +339,8 @@ function _runLinear(stack, startTex) {
             gl.useProgram(prog);
             bindTex0(prog, srcTex);
             setStdUniforms(prog, outDims.w, outDims.h);
-            autoBindUniforms(prog, effect, instance.params);
-            if (effect.bindUniforms) effect.bindUniforms(gl, prog, instance.params, curW, curH);
+            autoBindUniforms(prog, effect, renderParams);
+            if (effect.bindUniforms) effect.bindUniforms(gl, prog, renderParams, curW, curH);
             drawQuad();
 
             if (needResize) {
@@ -367,7 +379,7 @@ function _runLinear(stack, startTex) {
                 overlayCtx.clearRect(0, 0, canvas.width, canvas.height);
                 overlayCtx.drawImage(canvas, 0, 0);
                 const stickerCanvas = new OffscreenCanvas(canvas.width, canvas.height);
-                effect.canvas2d(stickerCanvas.getContext('2d'), instance.params, overlayCanvas);
+                effect.canvas2d(stickerCanvas.getContext('2d'), renderParams, overlayCanvas);
 
                 const stickerTex = _uploadStickerTex(stickerCanvas);
                 const blend      = _getBlendControl(effect.blendPrefix);
@@ -383,15 +395,15 @@ function _runLinear(stack, startTex) {
                     gl.bindTexture(gl.TEXTURE_2D, stickerTex);
                     if (prog._locs.uStickerTex != null) gl.uniform1i(prog._locs.uStickerTex, 1);
                     gl.activeTexture(gl.TEXTURE0);
-                    autoBindUniforms(prog, effect, instance.params);
-                    if (effect.bindUniforms) effect.bindUniforms(gl, prog, instance.params, dstFbo.width, dstFbo.height);
+                    autoBindUniforms(prog, effect, renderParams);
+                    if (effect.bindUniforms) effect.bindUniforms(gl, prog, renderParams, dstFbo.width, dstFbo.height);
                     drawQuad();
                 }
             } else {
                 // Legacy path: draw directly onto overlayCanvas (for canvas2d effects without blend controls).
                 overlayCtx.clearRect(0, 0, canvas.width, canvas.height);
                 overlayCtx.drawImage(canvas, 0, 0);
-                effect.canvas2d(overlayCtx, instance.params);
+                effect.canvas2d(overlayCtx, renderParams);
                 runPass(PASSTHROUGH_FRAG, _getOverlayTex(), dstFbo, null, null);
             }
 
@@ -402,7 +414,7 @@ function _runLinear(stack, startTex) {
 
         if (effect.glslPasses) {
             const passList = typeof effect.glslPasses === 'function'
-                ? effect.glslPasses(instance.params)
+                ? effect.glslPasses(renderParams)
                 : effect.glslPasses;
 
             // If any pass needs the pre-effect input via uTexOriginal, copy srcTex
@@ -430,8 +442,8 @@ function _runLinear(stack, startTex) {
                 gl.useProgram(prog);
                 bindTex0(prog, passSrc);
                 setStdUniforms(prog, dstFbo.width, dstFbo.height);
-                autoBindUniforms(prog, effect, instance.params);
-                if (effect.bindUniforms) effect.bindUniforms(gl, prog, instance.params, dstFbo.width, dstFbo.height, passSrc);
+                autoBindUniforms(prog, effect, renderParams);
+                if (effect.bindUniforms) effect.bindUniforms(gl, prog, renderParams, dstFbo.width, dstFbo.height, passSrc);
 
                 if (pass.needsOriginal && prog._locs.uTexOriginal != null) {
                     gl.activeTexture(gl.TEXTURE1);
@@ -453,7 +465,7 @@ function _runLinear(stack, startTex) {
         if (!effect.glsl) continue;
 
         const dstFbo = fboPool[pingIdx % 2];
-        if (!runPass(effect.glsl, srcTex, dstFbo, effect, instance.params)) continue;
+        if (!runPass(effect.glsl, srcTex, dstFbo, effect, renderParams)) continue;
 
         srcTex = dstFbo.tex;
         pingIdx++;

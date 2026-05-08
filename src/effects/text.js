@@ -124,7 +124,10 @@ function samplePalette(srcCtx, seed, count = 64) {
     return palette;
 }
 
-function resolveTextColor(key, rng, palette) {
+function resolveTextColor(key, rng, palette, customPalette) {
+    if (key === 'paletteRandom' && customPalette) return customPalette[Math.floor(rng() * 8)];
+    const palIdx = key.match(/^palette(\d)$/);
+    if (palIdx && customPalette) return customPalette[+palIdx[1]] ?? 'rgba(255,255,255,0.92)';
     if (NAMED_TEXT_COLORS[key]) return NAMED_TEXT_COLORS[key];
     if (key === 'greyNoise') { const v = Math.floor(rng() * 256); return `rgb(${v},${v},${v})`; }
     if (key === 'colorNoise') return `hsl(${Math.floor(rng() * 360)},100%,55%)`;
@@ -202,9 +205,27 @@ export function applyText(ctx, p, srcCanvas) {
     // Background: fill the actual quad shape
     if (bgKey && bgKey !== 'none') {
         const bgOpacity = p.textBgOpacity ?? 0.88;
+        const bgPaletteColor = (() => {
+            if (!p._activePalette) return null;
+            if (bgKey === 'paletteRandom') return p._activePalette[0];
+            const m = bgKey.match(/^palette(\d)$/);
+            return m ? (p._activePalette[+m[1]] ?? null) : null;
+        })();
         if (BG_NOISE_KEYS.has(bgKey)) {
             fillQuadWithGrain(ctx, tlx, tly, trx, try_, brx, bry, blx, bly,
                 bgKey, seed, palette, p.textBgGrainSize ?? 4, bgOpacity);
+        } else if (bgPaletteColor) {
+            ctx.save();
+            ctx.globalAlpha = bgOpacity;
+            ctx.fillStyle = bgPaletteColor;
+            ctx.beginPath();
+            ctx.moveTo(tlx, tly);
+            ctx.lineTo(trx, try_);
+            ctx.lineTo(brx, bry);
+            ctx.lineTo(blx, bly);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
         } else if (BG_COLORS[bgKey]) {
             ctx.save();
             ctx.globalAlpha = bgOpacity;
@@ -273,10 +294,10 @@ export function applyText(ctx, p, srcCanvas) {
             const dPdv_x = (1 - u) * (blx - tlx) + u * (brx - trx);
             const dPdv_y = (1 - u) * (bly - tly) + u * (bry - try_);
 
-            const fillColor = resolveTextColor(colorKey, () => seededRandom(seed, noiseIdx++), palette);
+            const fillColor = resolveTextColor(colorKey, () => seededRandom(seed, noiseIdx++), palette, p._activePalette);
             const strokeColor = outlineKey === 'auto'
                 ? ((colorKey === 'black') ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)')
-                : resolveTextColor(outlineKey, () => seededRandom(seed, outNoiseIdx++), palette);
+                : resolveTextColor(outlineKey, () => seededRandom(seed, outNoiseIdx++), palette, p._activePalette);
 
             ctx.save();
             ctx.fillStyle   = fillColor;
@@ -352,6 +373,10 @@ export const textEffect = {
             ['cyan','Cyan'], ['yellow','Yellow'], ['magenta','Magenta'],
             ['greyNoise','Grey Noise'], ['colorNoise','Color Noise'],
             ['paletteNoise','Image Palette'],
+            ['palette0','Palette 1'], ['palette1','Palette 2'], ['palette2','Palette 3'],
+            ['palette3','Palette 4'], ['palette4','Palette 5'], ['palette5','Palette 6'],
+            ['palette6','Palette 7'], ['palette7','Palette 8'],
+            ['paletteRandom','Palette Random'],
         ] },
         textNoiseSeed:      { default: 0 },
         textNoiseRandomize: { default: null, label: 'Randomize' },
@@ -364,6 +389,10 @@ export const textEffect = {
             ['cyan','Cyan'], ['yellow','Yellow'], ['magenta','Magenta'],
             ['greyNoise','Grey Noise'], ['colorNoise','Color Noise'],
             ['paletteNoise','Image Palette'],
+            ['palette0','Palette 1'], ['palette1','Palette 2'], ['palette2','Palette 3'],
+            ['palette3','Palette 4'], ['palette4','Palette 5'], ['palette5','Palette 6'],
+            ['palette6','Palette 7'], ['palette7','Palette 8'],
+            ['paletteRandom','Palette Random'],
         ] },
         textBg:         { default: 'none', label: 'Background', options: [
             ['none','None'], ['black','Black'], ['white','White'],
@@ -371,6 +400,10 @@ export const textEffect = {
             ['cyan','Cyan'], ['yellow','Yellow'], ['magenta','Magenta'],
             ['greyNoise','Grey Noise'], ['colorNoise','Color Noise'],
             ['paletteNoise','Image Palette'],
+            ['palette0','Palette 1'], ['palette1','Palette 2'], ['palette2','Palette 3'],
+            ['palette3','Palette 4'], ['palette4','Palette 5'], ['palette5','Palette 6'],
+            ['palette6','Palette 7'], ['palette7','Palette 8'],
+            ['paletteRandom','Palette Random'],
         ] },
         textBgOpacity:    { default: 0.88, min: 0, max: 1, step: 0.01, label: 'BG Opacity' },
         textBgGrainSize:  { default: 4, min: 1, max: 50, step: 1, label: 'BG Grain Size' },

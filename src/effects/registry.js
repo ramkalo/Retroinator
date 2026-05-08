@@ -1,3 +1,4 @@
+import { colorPaletteEffect } from './colorPalette.js';
 import doubleExposureEffect from './doubleExposure.js';
 import basicEffect          from './basic.js';
 import digitizeEffect       from './digitize.js';
@@ -82,6 +83,7 @@ function validateEffect(effect) {
 export const EFFECTS = [
     transformEffect,
     cropEffect,
+    colorPaletteEffect,
     doubleExposureEffect,
     basicEffect,
     digitizeEffect,
@@ -149,6 +151,7 @@ export function buildControlLimits() {
  * Each entry: { name, label, description }
  */
 export const EFFECT_CATALOG = [
+    { name: 'colorPalette',    label: 'Color Palette',         description: 'Define 8 custom colors that other effects can reference' },
     { name: 'basic',          label: 'Basic Adjustments',    description: 'Brightness, contrast, saturation, and color' },
     { name: 'blur',           label: 'Blur',                 description: 'Gaussian blur shaped like a vignette — sharp center, soft edges' },
     { name: 'chanSat',        label: 'Channel Saturation',   description: 'Target R, G, or B dominant pixels and boost or drain their saturation' },

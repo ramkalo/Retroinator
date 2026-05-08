@@ -131,6 +131,30 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
     const label = labelOverride ?? schema.label ?? key;
     const currentVal = inst.params[key];
 
+    // Palette randomize button — generates random hex for all 8 color slots
+    if (key === 'paletteRandomize') {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+        group.dataset.key = 'paletteRandomize';
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = label;
+        btn.disabled = inst.params.palettePreset !== 'custom';
+        btn.addEventListener('click', () => {
+            saveState();
+            for (let i = 0; i < 8; i++) {
+                const hex = '#' + Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, '0');
+                setInstanceParam(inst.id, `palette${i}`, hex);
+            }
+            if (onRebuild) onRebuild();
+        });
+        row.appendChild(btn);
+        group.appendChild(row);
+        return group;
+    }
+
     // Action button — schema.button names the param to randomize when clicked
     if (schema.button) {
         const group = document.createElement('div');
@@ -291,7 +315,16 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         }
         select.addEventListener('change', () => {
             saveState();
+            const prevValue = inst.params[key];
             setInstanceParam(inst.id, key, select.value);
+            const actionEffect = getEffect(inst.effectName);
+            const action = actionEffect?.paramActions?.[key];
+            if (action) {
+                const updates = action(select.value, inst.params, prevValue);
+                for (const [k, v] of Object.entries(updates)) {
+                    setInstanceParam(inst.id, k, v);
+                }
+            }
             if (onRebuild) onRebuild();
         });
         row.appendChild(labelEl);
@@ -355,6 +388,36 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         });
         row.appendChild(labelEl);
         row.appendChild(btn);
+        group.appendChild(row);
+        return group;
+    }
+
+    // Color picker → <input type="color">
+    if (schema.type === 'color') {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        const labelEl = document.createElement('span');
+        labelEl.className = 'control-label';
+        labelEl.textContent = label;
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = currentVal;
+        input.dataset.instParam = key;
+        input.addEventListener('input', () => {
+            setInstanceParam(inst.id, key, input.value);
+            // If this effect has a preset selector, reset it to 'custom' on manual edits
+            const colorEffect = getEffect(inst.effectName);
+            if (colorEffect?.params?.palettePreset && inst.params.palettePreset !== 'custom') {
+                setInstanceParam(inst.id, 'palettePreset', 'custom');
+                const container = input.closest('.tool-content');
+                const presetSelect = container?.querySelector('[data-inst-param="palettePreset"]');
+                if (presetSelect) presetSelect.value = 'custom';
+            }
+        });
+        row.appendChild(labelEl);
+        row.appendChild(input);
         group.appendChild(row);
         return group;
     }
