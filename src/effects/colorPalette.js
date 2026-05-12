@@ -77,6 +77,7 @@ export const colorPaletteEffect = {
         palette5: { default: '#0088ff', label: 'Color 6', type: 'color' },
         palette6: { default: '#ff00ff', label: 'Color 7', type: 'color' },
         palette7: { default: '#ffffff', label: 'Color 8', type: 'color' },
+        paletteSortByLuminance: { default: null, label: 'Sort by Luminance' },
         paletteCopyHex:      { default: null, label: 'Copy Hex' },
         palettePaste:        { default: null, label: 'Paste Hex' },
         paletteLoadImage:    { default: null, label: 'Load Palette Image' },

@@ -545,6 +545,37 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         return group;
     }
 
+    // Sort palette colors brightest → darkest by relative luminance
+    if (key === 'paletteSortByLuminance') {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+        group.dataset.key = 'paletteSortByLuminance';
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        const sortBtn = document.createElement('button');
+        sortBtn.className = 'btn';
+        sortBtn.textContent = label;
+        sortBtn.addEventListener('click', () => {
+            const colors = Array.from({ length: 8 }, (_, i) => inst.params[`palette${i}`] ?? '#000000');
+            const luminance = (hex) => {
+                const r = parseInt(hex.slice(1, 3), 16) / 255;
+                const g = parseInt(hex.slice(3, 5), 16) / 255;
+                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            };
+            const sorted = [...colors].sort((a, b) => luminance(b) - luminance(a));
+            saveState();
+            setInstanceParam(inst.id, 'palettePreset', 'custom');
+            for (let i = 0; i < 8; i++) {
+                setInstanceParam(inst.id, `palette${i}`, sorted[i]);
+            }
+            if (onRebuild) onRebuild();
+        });
+        row.appendChild(sortBtn);
+        group.appendChild(row);
+        return group;
+    }
+
     // Copy Hex button — appears below the 8 color pickers
     if (key === 'paletteCopyHex') {
         const group = document.createElement('div');
