@@ -313,9 +313,12 @@ export default {
     pass:  'pre-crt',
     handleParams: ['corruptedX', 'corruptedY', ...fade.handleParams],
     overlays: { fade: fade.overlay },
-    paramKeys: ['corruptedSeeds', 'corruptedSeed', 'corruptedPattern', 'corruptedColor', 'corruptedColorMode', 'corruptedInfect', 'corruptedChunkSize', 'corruptedCluster', 'corruptedX', 'corruptedY', ...fade.paramKeys, ...blend.paramKeys],
-    uiGroups: [
-        { keys: ['corruptedSeeds', 'corruptedSeed', 'corruptedPattern', 'corruptedColor', 'corruptedColorMode', 'corruptedInfect', 'corruptedChunkSize', 'corruptedCluster'] },
+    paramKeys: ['corruptedSeeds', 'corruptedSeed', 'corruptedPattern', 'corruptedColor', 'corruptedColorMode', 'corruptedZoneSeed', 'corruptedInfect', 'corruptedChunkSize', 'corruptedCluster', 'corruptedX', 'corruptedY', ...fade.paramKeys, ...blend.paramKeys],
+    uiGroups: (p) => [
+        { keys: (p.corruptedColorMode ?? 'per-chunk') === 'per-zone'
+            ? ['corruptedSeeds', 'corruptedSeed', 'corruptedPattern', 'corruptedColorMode', 'corruptedZoneSeed', 'corruptedInfect', 'corruptedChunkSize', 'corruptedCluster']
+            : ['corruptedSeeds', 'corruptedSeed', 'corruptedPattern', 'corruptedColorMode', 'corruptedColor', 'corruptedInfect', 'corruptedChunkSize', 'corruptedCluster']
+        },
         fade.uiGroup,
         blend.uiGroup,
     ],
@@ -328,7 +331,7 @@ export default {
             ['outbreak', 'Outbreak'], ['overgrowth', 'Overgrowth'],
             ['worm', 'Worm'], ['3-worms', '3 Worms'], ['snake', 'Snake'],
         ] },
-        corruptedColor:     { default: 'palette0', label: 'Color', options: [
+        corruptedColor:     { default: 'palette0', label: 'Color Fill', options: [
             ['palette0', 'Palette 1'], ['palette1', 'Palette 2'], ['palette2', 'Palette 3'],
             ['palette3', 'Palette 4'], ['palette4', 'Palette 5'], ['palette5', 'Palette 6'],
             ['palette6', 'Palette 7'], ['palette7', 'Palette 8'],
@@ -337,6 +340,7 @@ export default {
             ['inside', 'Inside Corruption'],
         ] },
         corruptedColorMode: { default: 'per-chunk', label: 'Color Mode', options: [['per-chunk', 'Per Chunk'], ['per-zone', 'Per Zone'], ['glitched', 'Glitched']] },
+        corruptedZoneSeed:  { default: 1,    min: 1,   max: 99999, label: 'Zone Colors' },
         corruptedInfect:    { default: 50,  min: 0,   max: 100,   label: 'Infect' },
         corruptedChunkSize: { default: 16,  min: 4,   max: 128,   label: 'Chunk Size' },
         corruptedCluster:   { default: 30,  min: 0,   max: 100,   label: 'Cluster' },
@@ -422,11 +426,13 @@ void main() {
 const _gpuCache = { key: null, srcTex: null, chunkTex: null, colorTex: null };
 
 function corruptedCacheKey(p, w, h) {
-    const palKey = (p.corruptedColor?.startsWith('palette') && p._activePalette)
+    const isPerZone = (p.corruptedColorMode ?? 'per-chunk') === 'per-zone';
+    const palKey = ((p.corruptedColor?.startsWith('palette') || isPerZone) && p._activePalette)
         ? p._activePalette.join('|') : '';
+    const zoneSeedKey = isPerZone ? (p.corruptedZoneSeed ?? 1) : '';
     return [p.corruptedSeed, p.corruptedPattern, p.corruptedSeeds, p.corruptedInfect,
             p.corruptedChunkSize, p.corruptedCluster,
-            p.corruptedColor, p.corruptedColorMode, w, h, palKey].join(',');
+            p.corruptedColor, p.corruptedColorMode, w, h, palKey, zoneSeedKey].join(',');
 }
 
 function flipYBuffer(buf, w, h) {
@@ -467,14 +473,25 @@ function buildChunkMapGPU(p, imgW, imgH) {
 
 function computeColorTexGPU(p, chunkMap, seeds, chunkW, chunkH, srcData, imgW, imgH) {
     const result      = new Uint8Array(chunkW * chunkH * 4);
-    const isGlitched  = (p.corruptedColorMode ?? 'per-chunk') === 'glitched';
+    const colorMode   = p.corruptedColorMode ?? 'per-chunk';
+    const isGlitched  = colorMode === 'glitched';
+    const isPerZone   = colorMode === 'per-zone';
+    const isPerChunk  = !isGlitched && !isPerZone;
     const solidColor  = SOLID_COLORS[p.corruptedColor];
     const palMatch    = !solidColor && p.corruptedColor?.match(/^palette(\d)$/);
     const isPalStatic = p.corruptedColor === 'palette-static';
     const isDynamic   = !solidColor && !palMatch && !isPalStatic
                         && p.corruptedColor !== 'static' && p.corruptedColor !== 'color-static';
-    const isPerChunk  = !isGlitched && (p.corruptedColorMode ?? 'per-chunk') === 'per-chunk';
     const palSolidRgb = palMatch ? hexToRgb(p._activePalette?.[+palMatch[1]] ?? '#ffffff') : null;
+
+    // Per-zone: each zone gets a distinct random palette color driven by corruptedZoneSeed
+    let zonePaletteColors = null;
+    if (isPerZone && p._activePalette) {
+        const zoneRng = mulberry32(p.corruptedZoneSeed ?? 1);
+        zonePaletteColors = Array.from({ length: p.corruptedSeeds }, () =>
+            hexToRgb(p._activePalette[Math.floor(zoneRng() * 8)])
+        );
+    }
 
     if (isGlitched) {
         const rng = mulberry32(p.corruptedSeed + 77777);
@@ -525,7 +542,9 @@ function computeColorTexGPU(p, chunkMap, seeds, chunkW, chunkH, srcData, imgW, i
         const cx = ci % chunkW, cy = Math.floor(ci / chunkW);
         let r, g, b;
 
-        if (solidColor) {
+        if (zonePaletteColors) {
+            [r, g, b] = zonePaletteColors[zone];
+        } else if (solidColor) {
             [r, g, b] = solidColor;
         } else if (palSolidRgb) {
             [r, g, b] = palSolidRgb;

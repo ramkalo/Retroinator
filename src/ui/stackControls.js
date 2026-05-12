@@ -969,7 +969,7 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
     }
 
     // Seed → Randomize button
-    if (key === 'vhsTrackingSeed' || key === 'corruptedSeed'
+    if (key === 'vhsTrackingSeed' || key === 'corruptedSeed' || key === 'corruptedZoneSeed'
         || key === 'matrixRainInjectSeed') {
         const group = document.createElement('div');
         group.className = 'control-group';
