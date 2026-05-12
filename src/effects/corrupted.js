@@ -217,6 +217,54 @@ function applyPath(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clust
     }
 }
 
+function applySnake(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, baseSeed) {
+    const rng       = mulberry32(baseSeed ^ Math.imul(0x5f3759df, 0xdeadbeef));
+    const horizontal = rng() < 0.5;
+    const lineLen   = horizontal ? chunkW : chunkH;  // parallel axis
+    const lineCount = horizontal ? chunkH : chunkW;  // perpendicular axis
+    const numLines  = Math.max(1, Math.round(pathLength * 0.25 / lineLen));
+    const baseGap   = Math.max(2, Math.floor(lineCount / (numLines + 1)));
+
+    // turnPos: where on the parallel axis the path currently sits (start of next line)
+    let linePos  = 1 + Math.floor(rng() * Math.max(1, baseGap - 1));
+    let turnPos  = Math.floor(rng() * lineLen);
+    let forward  = rng() < 0.5;
+
+    for (let i = 0; i < numLines && linePos < lineCount; i++) {
+        // Random line length: 40–95% of lineLen, extending from turnPos
+        const extent = Math.floor(lineLen * (0.4 + rng() * 0.55));
+        const farPos = forward
+            ? Math.min(lineLen - 1, turnPos + extent)
+            : Math.max(0, turnPos - extent);
+
+        // Draw sweep line from turnPos to farPos
+        const lo = Math.min(turnPos, farPos);
+        const hi = Math.max(turnPos, farPos);
+        for (let j = lo; j <= hi; j++) {
+            const cx = horizontal ? j      : linePos;
+            const cy = horizontal ? linePos : j;
+            markChunk(chunkMap, 0, cx, cy, chunkW, chunkH);
+        }
+
+        // Random gap to the next line (0.5×–1.8× base spacing)
+        const gap = Math.max(2, Math.round(baseGap * (0.5 + rng() * 1.3)));
+        const nextLinePos = linePos + gap;
+
+        if (i < numLines - 1 && nextLinePos < lineCount) {
+            // Connector runs perpendicular at farPos
+            for (let p = linePos + 1; p <= nextLinePos; p++) {
+                const cx = horizontal ? farPos : p;
+                const cy = horizontal ? p      : farPos;
+                markChunk(chunkMap, 0, cx, cy, chunkW, chunkH);
+            }
+            linePos = nextLinePos;
+            turnPos = farPos;  // next line picks up exactly where this one ended
+        }
+
+        forward = !forward;
+    }
+}
+
 function sampleFromRegion(region, chunkSize, width, height, srcData, corruptedChunks, boundaryChunks, rng, cx, cy) {
     let px, py;
     if (region === 'perimeter') {
@@ -273,7 +321,7 @@ export default {
         corruptedPattern:   { default: 'splat', label: 'Pattern', options: [
             ['splat', 'Splat'], ['rubble', 'Rubble'], ['detonation', 'Detonation'],
             ['outbreak', 'Outbreak'], ['overgrowth', 'Overgrowth'],
-            ['worm', 'Worm'], ['3-worms', '3 Worms'],
+            ['worm', 'Worm'], ['3-worms', '3 Worms'], ['snake', 'Snake'],
         ] },
         corruptedColor:     { default: 'r', label: 'Color', options: [
             ['r', 'Red'], ['g', 'Green'], ['b', 'Blue'],
@@ -403,6 +451,7 @@ function buildChunkMapGPU(p, imgW, imgH) {
     else if (pat === 'overgrowth') { applyChains(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed); applyBranching(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed); }
     else if (pat === 'worm')       applyPath(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, 1, baseSeed);
     else if (pat === '3-worms')    applyPath(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, 3, baseSeed);
+    else if (pat === 'snake')      applySnake(chunkMap, pathLength, chunkW, chunkH, centerX, centerY, clusterR, chunkSize, baseSeed);
 
     else                           applySplatter(chunkMap, seeds, infectRadius, chunkW, chunkH, baseSeed);
     return { chunkMap, seeds, chunkW, chunkH };
