@@ -12,23 +12,38 @@ const COLOR_OPTIONS = [
 ];
 
 export default {
-    name: 'invert',
-    label: 'Invert',
+    name: 'colorRemap',
+    label: 'Color Remap',
     pass: 'pre-crt',
-    paramKeys: ['invertColorA', 'invertColorB', 'invertColorC', 'invertColorD', 'invertColorE', ...fade.paramKeys, ...blend.paramKeys],
+    paramKeys: ['invertMode', 'invertColorA', 'invertColorB', 'invertColorC', 'invertColorD', 'invertColorE', ...fade.paramKeys, ...blend.paramKeys],
     handleParams: ['invertPosA', 'invertPosB', 'invertPosC', 'invertPosD', 'invertPosE', ...fade.handleParams],
-    uiGroups: [
-        { keys: ['invertColorA', 'invertColorB', 'invertColorC', 'invertColorD', 'invertColorE'] },
-        fade.uiGroup,
-        blend.uiGroup,
-    ],
+    uiGroups: (p) => {
+        const mode = p.invertMode ?? 'luminance';
+        const isHue    = mode === 'hue';
+        const isSimple = mode === 'simple';
+        const colorLabels = isHue
+            ? { invertColorA: 'Hue Start', invertColorC: 'Hue Low', invertColorD: 'Hue Mid',
+                invertColorE: 'Hue High',  invertColorB: 'Hue End' }
+            : { invertColorA: 'Shadows',   invertColorC: 'Dark Mid', invertColorD: 'Mid',
+                invertColorE: 'Light Mid', invertColorB: 'Highlights' };
+        const groups = [{ keys: ['invertMode'] }];
+        if (!isSimple) {
+            groups.push({
+                keys: ['invertColorA', 'invertColorC', 'invertColorD', 'invertColorE', 'invertColorB'],
+                labels: colorLabels,
+            });
+        }
+        groups.push(fade.uiGroup, blend.uiGroup);
+        return groups;
+    },
     params: {
         invertEnabled:   { default: false, label: 'Enable' },
-        invertColorA:    { default: 'all', label: 'Shadows', options: [['all', 'All Colors'], ...COLOR_OPTIONS] },
-        invertColorB:    { default: 'bk',  label: 'Highlights', options: COLOR_OPTIONS },
-        invertColorC:    { default: 'none', label: 'Mid 1', options: COLOR_OPTIONS },
-        invertColorD:    { default: 'none', label: 'Mid 2', options: COLOR_OPTIONS },
-        invertColorE:    { default: 'none', label: 'Mid 3', options: COLOR_OPTIONS },
+        invertMode:      { default: 'simple', label: 'Mode', options: [['luminance', 'Luminance Remap'], ['hue', 'Hue Remap'], ['simple', 'Simple Invert']] },
+        invertColorA:    { default: 'w',    label: 'Shadows',    options: COLOR_OPTIONS },
+        invertColorB:    { default: 'bk',   label: 'Highlights', options: COLOR_OPTIONS },
+        invertColorC:    { default: 'none', label: 'Dark Mid',   options: COLOR_OPTIONS },
+        invertColorD:    { default: 'none', label: 'Mid',        options: COLOR_OPTIONS },
+        invertColorE:    { default: 'none', label: 'Light Mid',  options: COLOR_OPTIONS },
         invertPosA:      { default: 0    },
         invertPosC:      { default: 0.25 },
         invertPosD:      { default: 0.5  },
@@ -58,17 +73,17 @@ export default {
             return fallback;
         };
 
-        const isAll = p.invertColorA === 'all';
-        const allLoc = prog._locs['invertAllColors'];
-        if (allLoc != null) gl.uniform1i(allLoc, isAll ? 1 : 0);
+        const modeMap = { luminance: 0, hue: 1, simple: 2 };
+        const modeLoc = prog._locs['invertMode'];
+        if (modeLoc != null) gl.uniform1i(modeLoc, modeMap[p.invertMode ?? 'luminance'] ?? 0);
 
-        // Pack active stops and their positions in luminance order (A, [C], [D], [E], B)
-        const stops = [resolveColor(p.invertColorA, [0,0,0])];
+        // Pack active stops in gradient order (A, [C], [D], [E], B)
+        const stops = [resolveColor(p.invertColorA, [1,1,1])];
         const poses = [p.invertPosA ?? 0];
         if (p.invertColorC !== 'none') { stops.push(resolveColor(p.invertColorC, [0,0,0])); poses.push(p.invertPosC ?? 0.25); }
         if (p.invertColorD !== 'none') { stops.push(resolveColor(p.invertColorD, [0,0,0])); poses.push(p.invertPosD ?? 0.5);  }
         if (p.invertColorE !== 'none') { stops.push(resolveColor(p.invertColorE, [0,0,0])); poses.push(p.invertPosE ?? 0.75); }
-        stops.push(resolveColor(p.invertColorB, [1,1,1]));
+        stops.push(resolveColor(p.invertColorB, [0,0,0]));
         poses.push(p.invertPosB ?? 1);
 
         const countLoc = prog._locs['invertStopCount'];
@@ -84,7 +99,7 @@ export default {
         blend.bindUniforms(gl, prog, p);
     },
     glsl: `
-uniform int   invertAllColors;
+uniform int   invertMode;
 uniform int   invertStopCount;
 uniform vec3  invertStop0;
 uniform vec3  invertStop1;
@@ -98,24 +113,36 @@ uniform float invertStopPos3;
 uniform float invertStopPos4;
 ${fade.glsl}
 ${blend.glsl}
+float invertGetHue(vec3 col) {
+    float maxC = max(col.r, max(col.g, col.b));
+    float minC = min(col.r, min(col.g, col.b));
+    float delta = maxC - minC;
+    if (delta < 0.0001) return 0.0;
+    float h;
+    if (maxC == col.r)      h = mod((col.g - col.b) / delta, 6.0) / 6.0;
+    else if (maxC == col.g) h = ((col.b - col.r) / delta + 2.0) / 6.0;
+    else                    h = ((col.r - col.g) / delta + 4.0) / 6.0;
+    return h < 0.0 ? h + 1.0 : h;
+}
 void main() {
     vec4 c = texture(uTex, vUV);
-    float lum = 0.299*c.r + 0.587*c.g + 0.114*c.b;
     vec3 adjusted;
-    if (invertAllColors == 1) {
+    if (invertMode == 2) {
         adjusted = vec3(1.0 - c.r, 1.0 - c.g, 1.0 - c.b);
     } else {
+        float val = (invertMode == 1) ? invertGetHue(c.rgb)
+                                      : (0.299*c.r + 0.587*c.g + 0.114*c.b);
         int seg = 0;
-        if (invertStopCount > 1 && lum >= invertStopPos1) seg = 1;
-        if (invertStopCount > 2 && lum >= invertStopPos2) seg = 2;
-        if (invertStopCount > 3 && lum >= invertStopPos3) seg = 3;
-        if (invertStopCount > 4 && lum >= invertStopPos4) seg = 4;
+        if (invertStopCount > 1 && val >= invertStopPos1) seg = 1;
+        if (invertStopCount > 2 && val >= invertStopPos2) seg = 2;
+        if (invertStopCount > 3 && val >= invertStopPos3) seg = 3;
+        if (invertStopCount > 4 && val >= invertStopPos4) seg = 4;
         seg = min(seg, invertStopCount - 2);
         float plo = seg==0 ? invertStopPos0 : seg==1 ? invertStopPos1 : seg==2 ? invertStopPos2 : invertStopPos3;
         float phi = seg==0 ? invertStopPos1 : seg==1 ? invertStopPos2 : seg==2 ? invertStopPos3 : invertStopPos4;
         vec3  clo = seg==0 ? invertStop0 : seg==1 ? invertStop1 : seg==2 ? invertStop2 : invertStop3;
         vec3  chi = seg==0 ? invertStop1 : seg==1 ? invertStop2 : seg==2 ? invertStop3 : invertStop4;
-        adjusted = mix(clo, chi, clamp((lum - plo) / max(phi - plo, 0.0001), 0.0, 1.0));
+        adjusted = mix(clo, chi, clamp((val - plo) / max(phi - plo, 0.0001), 0.0, 1.0));
     }
     float weight = ${fade.fnName}();
     vec3 faded = mix(c.rgb, adjusted, weight);

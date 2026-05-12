@@ -5,6 +5,7 @@ import { getCustomFonts } from '../state/customFonts.js';
 import { getPixelsBeforeInstance } from '../renderer/webgl.js';
 
 let activeSliderGroup = null;
+let _paletteDragSrc = null; // { instId, index } while a palette swatch is being dragged
 
 // Stores a loaded reference image per palette instance (not serialized)
 const _paletteImages = new Map();
@@ -183,7 +184,12 @@ export function buildEffectBody(inst, onRebuild) {
         content.insertBefore(row, content.firstChild ? content.firstChild.nextSibling : null);
     }
 
-    if (inst.effectName === 'invert') {
+    if (inst.effectName === 'colorRemap') {
+        const mode = inst.params.invertMode ?? 'luminance';
+
+        const modeSelect = content.querySelector('[data-inst-param="invertMode"]');
+        modeSelect?.addEventListener('change', () => { if (onRebuild) onRebuild(); });
+
         const colorASelect = content.querySelector('[data-inst-param="invertColorA"]');
         const colorAGroup = colorASelect?.closest('.control-group');
         const colorBSelect = content.querySelector('[data-inst-param="invertColorB"]');
@@ -222,213 +228,7 @@ export function buildEffectBody(inst, onRebuild) {
             return null;
         };
 
-        // --- checkboxes for C, D, E (activate / deactivate optional stops) ---
-        const stopCheckboxes = {};
-        const lastColors = {
-            invertColorC: inst.params.invertColorC !== 'none' ? inst.params.invertColorC : 'w',
-            invertColorD: inst.params.invertColorD !== 'none' ? inst.params.invertColorD : 'w',
-            invertColorE: inst.params.invertColorE !== 'none' ? inst.params.invertColorE : 'w',
-        };
-        for (const [colorKey, selectEl, group] of [
-            ['invertColorC', colorCSelect, colorCGroup],
-            ['invertColorD', colorDSelect, colorDGroup],
-            ['invertColorE', colorESelect, colorEGroup],
-        ]) {
-            if (!group) continue;
-            const row = group.querySelector('.control-row');
-            if (!row) continue;
-            const cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.checked = inst.params[colorKey] !== 'none';
-            cb.style.cssText = 'flex-shrink:0;margin-right:4px;cursor:pointer;';
-            row.insertBefore(cb, row.firstChild);
-            stopCheckboxes[colorKey] = cb;
-            if (selectEl) selectEl.disabled = inst.params[colorKey] === 'none';
-            cb.addEventListener('change', () => {
-                saveState();
-                if (cb.checked) {
-                    setInstanceParam(inst.id, colorKey, lastColors[colorKey]);
-                    if (selectEl) selectEl.disabled = false;
-                } else {
-                    if (selectEl && selectEl.value !== 'none') lastColors[colorKey] = selectEl.value;
-                    setInstanceParam(inst.id, colorKey, 'none');
-                    if (selectEl) selectEl.disabled = true;
-                }
-                updateSlider();
-            });
-        }
-
-        const syncCheckboxes = () => {
-            for (const [colorKey, cb] of Object.entries(stopCheckboxes)) {
-                cb.checked = inst.params[colorKey] !== 'none';
-                const selEl = content.querySelector(`[data-inst-param="${colorKey}"]`);
-                if (selEl) selEl.disabled = !cb.checked;
-            }
-        };
-
-        const syncSelectValues = () => {
-            for (const sel of [colorASelect, colorBSelect, colorCSelect, colorDSelect, colorESelect]) {
-                if (!sel) continue;
-                const key = sel.dataset.instParam;
-                if (key && inst.params[key] !== undefined) sel.value = inst.params[key];
-                styleColorSelect(sel);
-            }
-        };
-
-        // --- stop-positions slider ---
-        const STOP_DEFS = [
-            { posKey: 'invertPosA', colorKey: 'invertColorA', label: 'A', defaultPos: 0    },
-            { posKey: 'invertPosC', colorKey: 'invertColorC', label: 'C', defaultPos: 0.25 },
-            { posKey: 'invertPosD', colorKey: 'invertColorD', label: 'D', defaultPos: 0.5  },
-            { posKey: 'invertPosE', colorKey: 'invertColorE', label: 'E', defaultPos: 0.75 },
-            { posKey: 'invertPosB', colorKey: 'invertColorB', label: 'B', defaultPos: 1    },
-        ];
-        const getStopPos  = (i) => inst.params[STOP_DEFS[i].posKey] ?? STOP_DEFS[i].defaultPos;
-        const isStopActive = (i) => i === 0 || i === 4 || inst.params[STOP_DEFS[i].colorKey] !== 'none';
-
-        const sliderGroup = document.createElement('div');
-        sliderGroup.className = 'control-group';
-        const sliderRow = document.createElement('div');
-        sliderRow.className = 'control-row';
-        sliderRow.style.cssText = 'flex-direction:column;align-items:stretch;gap:2px;';
-
-        const sliderLabel = document.createElement('span');
-        sliderLabel.className = 'control-label';
-        sliderLabel.textContent = 'Stop Positions';
-
-        const trackWrap = document.createElement('div');
-        trackWrap.style.cssText = 'position:relative;height:20px;margin:4px 6px;';
-
-        const trackBg = document.createElement('div');
-        trackBg.style.cssText = 'position:absolute;inset:0;border-radius:4px;border:1px solid var(--border);pointer-events:none;';
-        trackWrap.appendChild(trackBg);
-
-        const handles = STOP_DEFS.map((def, i) => {
-            const h = document.createElement('div');
-            h.style.cssText = 'position:absolute;top:-2px;width:12px;height:24px;transform:translateX(-50%);border-radius:3px;border:2px solid rgba(255,255,255,0.5);cursor:ew-resize;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;user-select:none;box-sizing:border-box;';
-            h.textContent = def.label;
-            trackWrap.appendChild(h);
-            return h;
-        });
-
-        const updateSlider = () => {
-            const gradParts = [];
-            for (let i = 0; i < 5; i++) {
-                if (!isStopActive(i)) continue;
-                const hex = resolveInvertHex(inst.params[STOP_DEFS[i].colorKey]) ?? '#808080';
-                gradParts.push(`${hex} ${(getStopPos(i) * 100).toFixed(1)}%`);
-            }
-            trackBg.style.background = gradParts.length > 1
-                ? `linear-gradient(to right, ${gradParts.join(', ')})`
-                : 'var(--bg-2)';
-
-            for (let i = 0; i < 5; i++) {
-                const active = isStopActive(i);
-                handles[i].style.display = active ? 'flex' : 'none';
-                if (!active) continue;
-                handles[i].style.left = `${getStopPos(i) * 100}%`;
-                const hex = resolveInvertHex(inst.params[STOP_DEFS[i].colorKey]) ?? '#808080';
-                const fg  = contrastColor(hex);
-                handles[i].style.backgroundColor = hex;
-                handles[i].style.color = fg;
-                handles[i].style.borderColor = fg === '#000000' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)';
-            }
-        };
-
-        // drag-past swap: shared drag state so color identity follows the cursor across handles
-        const dragState = { active: false, idx: -1 };
-
-        for (let i = 0; i < 5; i++) {
-            handles[i].addEventListener('pointerdown', (e) => {
-                if (!isStopActive(i)) return;
-                e.preventDefault();
-                handles[i].setPointerCapture(e.pointerId);
-                saveState();
-                dragState.active = true;
-                dragState.idx = i;
-            });
-            handles[i].addEventListener('pointermove', (e) => {
-                if (!dragState.active) return;
-                const rect = trackWrap.getBoundingClientRect();
-                const newPos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-
-                // swap colors when crossing an adjacent active stop; loop handles fast drags
-                let swapped = true;
-                while (swapped) {
-                    swapped = false;
-                    const di = dragState.idx;
-                    for (let j = di + 1; j < 5; j++) {
-                        if (!isStopActive(j)) continue;
-                        if (newPos >= getStopPos(j)) {
-                            const ca = inst.params[STOP_DEFS[di].colorKey];
-                            const cb = inst.params[STOP_DEFS[j].colorKey];
-                            setInstanceParam(inst.id, STOP_DEFS[di].colorKey, cb);
-                            setInstanceParam(inst.id, STOP_DEFS[j].colorKey, ca);
-                            dragState.idx = j;
-                            swapped = true;
-                        }
-                        break;
-                    }
-                    const di2 = dragState.idx;
-                    for (let j = di2 - 1; j >= 0; j--) {
-                        if (!isStopActive(j)) continue;
-                        if (newPos <= getStopPos(j)) {
-                            const ca = inst.params[STOP_DEFS[di2].colorKey];
-                            const cb = inst.params[STOP_DEFS[j].colorKey];
-                            setInstanceParam(inst.id, STOP_DEFS[di2].colorKey, cb);
-                            setInstanceParam(inst.id, STOP_DEFS[j].colorKey, ca);
-                            dragState.idx = j;
-                            swapped = true;
-                        }
-                        break;
-                    }
-                }
-
-                setInstanceParam(inst.id, STOP_DEFS[dragState.idx].posKey, Math.round(newPos * 1000) / 1000);
-                updateSlider();
-                syncCheckboxes();
-                syncSelectValues();
-            });
-            handles[i].addEventListener('pointerup',          () => { dragState.active = false; dragState.idx = -1; });
-            handles[i].addEventListener('lostpointercapture', () => { dragState.active = false; dragState.idx = -1; });
-        }
-
-        sliderRow.appendChild(sliderLabel);
-        sliderRow.appendChild(trackWrap);
-
-        const gradBar = document.createElement('div');
-        gradBar.style.cssText = 'height:6px;border-radius:3px;border:1px solid var(--border);margin:2px 6px 4px;background:linear-gradient(to right,#000,#fff);pointer-events:none;';
-        sliderRow.appendChild(gradBar);
-
-        sliderGroup.appendChild(sliderRow);
-
-        if (colorEGroup) colorEGroup.after(sliderGroup);
-        else content.appendChild(sliderGroup);
-
-        updateSlider();
-
-        // --- randomize button ---
-        const randomizeRow = document.createElement('div');
-        randomizeRow.className = 'control-group';
-        randomizeRow.innerHTML = `<div class="control-row"><button class="btn">⚄ Randomize Colors</button></div>`;
-        const randomizeBtn = randomizeRow.querySelector('button');
-        randomizeBtn.addEventListener('click', () => {
-            const palette = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
-            for (let i = palette.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [palette[i], palette[j]] = [palette[j], palette[i]];
-            }
-            saveState();
-            setInstanceParam(inst.id, 'invertColorA', palette[0]);
-            setInstanceParam(inst.id, 'invertColorB', palette[1]);
-            setInstanceParam(inst.id, 'invertColorC', Math.random() < 0.88 ? palette[2] : 'none');
-            setInstanceParam(inst.id, 'invertColorD', Math.random() < 0.88 ? palette[3] : 'none');
-            setInstanceParam(inst.id, 'invertColorE', Math.random() < 0.88 ? palette[4] : 'none');
-            if (onRebuild) onRebuild();
-        });
-        sliderGroup.after(randomizeRow);
-
-        // --- option swatches ---
+        // --- option swatches (used by stop slider and select change handlers) ---
         const styleColorSelect = (selectEl) => {
             if (!selectEl) return;
             for (const opt of selectEl.options) {
@@ -449,35 +249,252 @@ export function buildEffectBody(inst, onRebuild) {
             swatch.style.backgroundColor = hex ?? 'transparent';
             swatch.style.opacity = hex ? '1' : '0.25';
         };
-        for (const sel of [colorASelect, colorBSelect, colorCSelect, colorDSelect, colorESelect]) {
-            if (!sel) continue;
-            styleColorSelect(sel);
-            sel.addEventListener('change', () => { styleColorSelect(sel); updateSlider(); });
-            document.addEventListener('paletteupdate', () => {
-                if (!document.contains(sel)) return;
-                styleColorSelect(sel);
-                updateSlider();
+
+        if (mode !== 'simple') {
+            // --- checkboxes for C, D, E (activate / deactivate optional stops) ---
+            const stopCheckboxes = {};
+            const lastColors = {
+                invertColorC: inst.params.invertColorC !== 'none' ? inst.params.invertColorC : 'w',
+                invertColorD: inst.params.invertColorD !== 'none' ? inst.params.invertColorD : 'w',
+                invertColorE: inst.params.invertColorE !== 'none' ? inst.params.invertColorE : 'w',
+            };
+            for (const [colorKey, selectEl, group] of [
+                ['invertColorC', colorCSelect, colorCGroup],
+                ['invertColorD', colorDSelect, colorDGroup],
+                ['invertColorE', colorESelect, colorEGroup],
+            ]) {
+                if (!group) continue;
+                const row = group.querySelector('.control-row');
+                if (!row) continue;
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = inst.params[colorKey] !== 'none';
+                cb.style.cssText = 'flex-shrink:0;margin-right:4px;cursor:pointer;';
+                row.insertBefore(cb, row.firstChild);
+                stopCheckboxes[colorKey] = cb;
+                if (selectEl) selectEl.disabled = inst.params[colorKey] === 'none';
+                cb.addEventListener('change', () => {
+                    saveState();
+                    if (cb.checked) {
+                        setInstanceParam(inst.id, colorKey, lastColors[colorKey]);
+                        if (selectEl) selectEl.disabled = false;
+                        // Snap position into range between active neighbors
+                        const stopIdx = STOP_DEFS.findIndex(d => d.colorKey === colorKey);
+                        let leftPos = 0;
+                        for (let j = stopIdx - 1; j >= 0; j--) {
+                            if (j === 0 || inst.params[STOP_DEFS[j].colorKey] !== 'none') { leftPos = getStopPos(j); break; }
+                        }
+                        let rightPos = 1;
+                        for (let j = stopIdx + 1; j < 5; j++) {
+                            if (j === 4 || inst.params[STOP_DEFS[j].colorKey] !== 'none') { rightPos = getStopPos(j); break; }
+                        }
+                        const cur = getStopPos(stopIdx);
+                        if (cur <= leftPos || cur >= rightPos) {
+                            setInstanceParam(inst.id, STOP_DEFS[stopIdx].posKey, Math.round(((leftPos + rightPos) / 2) * 1000) / 1000);
+                        }
+                    } else {
+                        if (selectEl && selectEl.value !== 'none') lastColors[colorKey] = selectEl.value;
+                        setInstanceParam(inst.id, colorKey, 'none');
+                        if (selectEl) selectEl.disabled = true;
+                    }
+                    updateSlider();
+                });
+            }
+
+            const syncCheckboxes = () => {
+                for (const [colorKey, cb] of Object.entries(stopCheckboxes)) {
+                    cb.checked = inst.params[colorKey] !== 'none';
+                    const selEl = content.querySelector(`[data-inst-param="${colorKey}"]`);
+                    if (selEl) selEl.disabled = !cb.checked;
+                }
+            };
+
+            const syncSelectValues = () => {
+                for (const sel of [colorASelect, colorBSelect, colorCSelect, colorDSelect, colorESelect]) {
+                    if (!sel) continue;
+                    const key = sel.dataset.instParam;
+                    if (key && inst.params[key] !== undefined) sel.value = inst.params[key];
+                    styleColorSelect(sel);
+                }
+            };
+
+            // --- stop-positions slider ---
+            const STOP_DEFS = [
+                { posKey: 'invertPosA', colorKey: 'invertColorA', label: '1', defaultPos: 0    },
+                { posKey: 'invertPosC', colorKey: 'invertColorC', label: '2', defaultPos: 0.25 },
+                { posKey: 'invertPosD', colorKey: 'invertColorD', label: '3', defaultPos: 0.5  },
+                { posKey: 'invertPosE', colorKey: 'invertColorE', label: '4', defaultPos: 0.75 },
+                { posKey: 'invertPosB', colorKey: 'invertColorB', label: '5', defaultPos: 1    },
+            ];
+            const getStopPos   = (i) => inst.params[STOP_DEFS[i].posKey] ?? STOP_DEFS[i].defaultPos;
+            const isStopActive = (i) => i === 0 || i === 4 || inst.params[STOP_DEFS[i].colorKey] !== 'none';
+
+            const sliderGroup = document.createElement('div');
+            sliderGroup.className = 'control-group';
+            const sliderRow = document.createElement('div');
+            sliderRow.className = 'control-row';
+            sliderRow.style.cssText = 'flex-direction:column;align-items:stretch;gap:2px;';
+
+            const sliderLabel = document.createElement('span');
+            sliderLabel.className = 'control-label';
+            sliderLabel.textContent = 'Stop Positions';
+
+            const trackWrap = document.createElement('div');
+            trackWrap.style.cssText = 'position:relative;height:20px;margin:4px 6px;';
+
+            const trackBg = document.createElement('div');
+            trackBg.style.cssText = 'position:absolute;inset:0;border-radius:4px;border:1px solid var(--border);pointer-events:none;';
+            trackWrap.appendChild(trackBg);
+
+            const handles = STOP_DEFS.map((def, i) => {
+                const h = document.createElement('div');
+                h.style.cssText = 'position:absolute;top:-2px;width:12px;height:24px;transform:translateX(-50%);border-radius:3px;border:2px solid rgba(255,255,255,0.5);cursor:ew-resize;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;user-select:none;box-sizing:border-box;';
+                h.textContent = def.label;
+                trackWrap.appendChild(h);
+                return h;
             });
-        }
 
-        function syncAllColorsState() {
-            const isAll = colorASelect?.value === 'all';
-            if (colorBSelect) colorBSelect.disabled = isAll;
-            if (colorBGroup)  colorBGroup.style.opacity = isAll ? '0.4' : '';
-            if (colorCSelect) colorCSelect.disabled = isAll || inst.params.invertColorC === 'none';
-            if (colorCGroup)  colorCGroup.style.opacity = isAll ? '0.4' : '';
-            if (colorDSelect) colorDSelect.disabled = isAll || inst.params.invertColorD === 'none';
-            if (colorDGroup)  colorDGroup.style.opacity = isAll ? '0.4' : '';
-            if (colorESelect) colorESelect.disabled = isAll || inst.params.invertColorE === 'none';
-            if (colorEGroup)  colorEGroup.style.opacity = isAll ? '0.4' : '';
-            for (const cb of Object.values(stopCheckboxes)) cb.disabled = isAll;
-            sliderGroup.style.opacity = isAll ? '0.4' : '';
-            sliderGroup.style.pointerEvents = isAll ? 'none' : '';
-            randomizeBtn.disabled = isAll;
-        }
+            const updateSlider = () => {
+                const gradParts = [];
+                for (let i = 0; i < 5; i++) {
+                    if (!isStopActive(i)) continue;
+                    const hex = resolveInvertHex(inst.params[STOP_DEFS[i].colorKey]) ?? '#808080';
+                    gradParts.push(`${hex} ${(getStopPos(i) * 100).toFixed(1)}%`);
+                }
+                trackBg.style.background = gradParts.length > 1
+                    ? `linear-gradient(to right, ${gradParts.join(', ')})`
+                    : 'var(--bg-2)';
 
-        colorASelect?.addEventListener('change', syncAllColorsState);
-        syncAllColorsState();
+                for (let i = 0; i < 5; i++) {
+                    const active = isStopActive(i);
+                    handles[i].style.display = active ? 'flex' : 'none';
+                    if (!active) continue;
+                    handles[i].style.left = `${getStopPos(i) * 100}%`;
+                    const hex = resolveInvertHex(inst.params[STOP_DEFS[i].colorKey]) ?? '#808080';
+                    const fg  = contrastColor(hex);
+                    handles[i].style.backgroundColor = hex;
+                    handles[i].style.color = fg;
+                    handles[i].style.borderColor = fg === '#000000' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)';
+                }
+            };
+
+            // drag-past swap: shared drag state so color identity follows the cursor across handles
+            const dragState = { active: false, idx: -1 };
+
+            for (let i = 0; i < 5; i++) {
+                handles[i].addEventListener('pointerdown', (e) => {
+                    if (!isStopActive(i)) return;
+                    e.preventDefault();
+                    handles[i].setPointerCapture(e.pointerId);
+                    saveState();
+                    dragState.active = true;
+                    dragState.idx = i;
+                });
+                handles[i].addEventListener('pointermove', (e) => {
+                    if (!dragState.active) return;
+                    const rect = trackWrap.getBoundingClientRect();
+                    const newPos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+
+                    // swap colors when crossing an adjacent active stop; loop handles fast drags
+                    let swapped = true;
+                    while (swapped) {
+                        swapped = false;
+                        const di = dragState.idx;
+                        for (let j = di + 1; j < 5; j++) {
+                            if (!isStopActive(j)) continue;
+                            if (newPos >= getStopPos(j)) {
+                                const ca = inst.params[STOP_DEFS[di].colorKey];
+                                const cb = inst.params[STOP_DEFS[j].colorKey];
+                                setInstanceParam(inst.id, STOP_DEFS[di].colorKey, cb);
+                                setInstanceParam(inst.id, STOP_DEFS[j].colorKey, ca);
+                                dragState.idx = j;
+                                swapped = true;
+                            }
+                            break;
+                        }
+                        const di2 = dragState.idx;
+                        for (let j = di2 - 1; j >= 0; j--) {
+                            if (!isStopActive(j)) continue;
+                            if (newPos <= getStopPos(j)) {
+                                const ca = inst.params[STOP_DEFS[di2].colorKey];
+                                const cb = inst.params[STOP_DEFS[j].colorKey];
+                                setInstanceParam(inst.id, STOP_DEFS[di2].colorKey, cb);
+                                setInstanceParam(inst.id, STOP_DEFS[j].colorKey, ca);
+                                dragState.idx = j;
+                                swapped = true;
+                            }
+                            break;
+                        }
+                    }
+
+                    setInstanceParam(inst.id, STOP_DEFS[dragState.idx].posKey, Math.round(newPos * 1000) / 1000);
+                    updateSlider();
+                    syncCheckboxes();
+                    syncSelectValues();
+                });
+                handles[i].addEventListener('pointerup',          () => { dragState.active = false; dragState.idx = -1; });
+                handles[i].addEventListener('lostpointercapture', () => { dragState.active = false; dragState.idx = -1; });
+            }
+
+            sliderRow.appendChild(sliderLabel);
+            sliderRow.appendChild(trackWrap);
+
+            const gradBar = document.createElement('div');
+            gradBar.style.cssText = 'height:6px;border-radius:3px;border:1px solid var(--border);margin:2px 6px 4px;pointer-events:none;';
+            gradBar.style.background = mode === 'hue'
+                ? 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)'
+                : 'linear-gradient(to right, #000, #fff)';
+            sliderRow.appendChild(gradBar);
+
+            sliderGroup.appendChild(sliderRow);
+
+            if (colorBGroup) colorBGroup.after(sliderGroup);
+            else content.appendChild(sliderGroup);
+
+            updateSlider();
+
+            // --- randomize + palette sort buttons ---
+            const randomizeRow = document.createElement('div');
+            randomizeRow.className = 'control-group';
+            randomizeRow.innerHTML = `<div class="control-row" style="gap:6px;"><button class="btn">⚄ Shuffle Palette</button><button class="btn">Palette Sort</button></div>`;
+            const randomizeBtn = randomizeRow.querySelector('button');
+            randomizeBtn.addEventListener('click', () => {
+                const palette = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
+                for (let i = palette.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [palette[i], palette[j]] = [palette[j], palette[i]];
+                }
+                saveState();
+                setInstanceParam(inst.id, 'invertColorA', palette[0]);
+                setInstanceParam(inst.id, 'invertColorB', palette[1]);
+                setInstanceParam(inst.id, 'invertColorC', Math.random() < 0.88 ? palette[2] : 'none');
+                setInstanceParam(inst.id, 'invertColorD', Math.random() < 0.88 ? palette[3] : 'none');
+                setInstanceParam(inst.id, 'invertColorE', Math.random() < 0.88 ? palette[4] : 'none');
+                if (onRebuild) onRebuild();
+            });
+            const paletteSortBtn = randomizeRow.querySelectorAll('button')[1];
+            paletteSortBtn.addEventListener('click', () => {
+                saveState();
+                setInstanceParam(inst.id, 'invertColorA', 'p7');
+                setInstanceParam(inst.id, 'invertColorC', 'p5');
+                setInstanceParam(inst.id, 'invertColorD', 'p3');
+                setInstanceParam(inst.id, 'invertColorE', 'p1');
+                setInstanceParam(inst.id, 'invertColorB', 'p0');
+                if (onRebuild) onRebuild();
+            });
+            sliderGroup.after(randomizeRow);
+
+            for (const sel of [colorASelect, colorBSelect, colorCSelect, colorDSelect, colorESelect]) {
+                if (!sel) continue;
+                styleColorSelect(sel);
+                sel.addEventListener('change', () => { styleColorSelect(sel); updateSlider(); });
+                document.addEventListener('paletteupdate', () => {
+                    if (!document.contains(sel)) return;
+                    styleColorSelect(sel);
+                    updateSlider();
+                });
+            }
+        }
     }
 
     if (inst.effectName === 'text') {
@@ -571,7 +588,41 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
             }
             if (onRebuild) onRebuild();
         });
+
+        const reverseBtn = document.createElement('button');
+        reverseBtn.className = 'btn';
+        reverseBtn.textContent = 'Reverse Order';
+        reverseBtn.addEventListener('click', () => {
+            const colors = Array.from({ length: 8 }, (_, i) => inst.params[`palette${i}`] ?? '#000000');
+            const reversed = [...colors].reverse();
+            saveState();
+            setInstanceParam(inst.id, 'palettePreset', 'custom');
+            for (let i = 0; i < 8; i++) {
+                setInstanceParam(inst.id, `palette${i}`, reversed[i]);
+            }
+            if (onRebuild) onRebuild();
+        });
+
+        const shuffleBtn = document.createElement('button');
+        shuffleBtn.className = 'btn';
+        shuffleBtn.textContent = 'Shuffle Order';
+        shuffleBtn.addEventListener('click', () => {
+            const colors = Array.from({ length: 8 }, (_, i) => inst.params[`palette${i}`] ?? '#000000');
+            for (let i = colors.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [colors[i], colors[j]] = [colors[j], colors[i]];
+            }
+            saveState();
+            setInstanceParam(inst.id, 'palettePreset', 'custom');
+            for (let i = 0; i < 8; i++) {
+                setInstanceParam(inst.id, `palette${i}`, colors[i]);
+            }
+            if (onRebuild) onRebuild();
+        });
+
         row.appendChild(sortBtn);
+        row.appendChild(reverseBtn);
+        row.appendChild(shuffleBtn);
         group.appendChild(row);
         return group;
     }
@@ -975,6 +1026,75 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         row.appendChild(input);
         row.appendChild(hexSpan);
         group.appendChild(row);
+
+        // Drag-to-swap for palette color slots
+        if (/^palette[0-7]$/.test(key)) {
+            const paletteIndex = parseInt(key.slice(-1));
+
+            const randBtn = document.createElement('button');
+            randBtn.className = 'btn btn-sm';
+            randBtn.textContent = '?';
+            randBtn.title = 'Randomize this color';
+            randBtn.style.cssText = 'padding:2px 6px;font-size:0.7rem;flex-shrink:0;';
+            randBtn.addEventListener('click', () => {
+                const hex = '#' + Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, '0');
+                saveState();
+                setInstanceParam(inst.id, 'palettePreset', 'custom');
+                setInstanceParam(inst.id, key, hex);
+                input.value = hex;
+                hexSpan.textContent = hex;
+                if (inst.effectName === 'colorPalette') {
+                    document.dispatchEvent(new CustomEvent('paletteupdate'));
+                }
+            });
+            row.appendChild(randBtn);
+
+            const handle = document.createElement('span');
+            handle.textContent = '⠿';
+            handle.style.cssText = 'cursor:grab;color:var(--text-dim);font-size:1rem;padding-right:4px;user-select:none;flex-shrink:0;';
+            row.insertBefore(handle, row.firstChild);
+
+            group.draggable = true;
+
+            group.addEventListener('dragstart', (e) => {
+                _paletteDragSrc = { instId: inst.id, index: paletteIndex };
+                e.dataTransfer.effectAllowed = 'move';
+                // defer so the browser snapshot doesn't capture the dimmed state
+                requestAnimationFrame(() => { group.style.opacity = '0.4'; });
+            });
+
+            group.addEventListener('dragend', () => {
+                group.style.opacity = '';
+                group.style.outline = '';
+            });
+
+            group.addEventListener('dragover', (e) => {
+                if (!_paletteDragSrc || _paletteDragSrc.instId !== inst.id) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                group.style.outline = '1px solid var(--accent, #888)';
+            });
+
+            group.addEventListener('dragleave', () => {
+                group.style.outline = '';
+            });
+
+            group.addEventListener('drop', (e) => {
+                e.preventDefault();
+                group.style.outline = '';
+                if (!_paletteDragSrc || _paletteDragSrc.instId !== inst.id) return;
+                const srcIdx = _paletteDragSrc.index;
+                _paletteDragSrc = null;
+                if (srcIdx === paletteIndex) return;
+                const srcColor = inst.params[`palette${srcIdx}`];
+                const dstColor = inst.params[`palette${paletteIndex}`];
+                saveState();
+                setInstanceParam(inst.id, `palette${srcIdx}`, dstColor);
+                setInstanceParam(inst.id, `palette${paletteIndex}`, srcColor);
+                if (onRebuild) onRebuild();
+            });
+        }
+
         return group;
     }
 

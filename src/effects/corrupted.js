@@ -22,6 +22,11 @@ const SOLID_COLORS = {
     rgb: [255, 255, 255],
 };
 
+function hexToRgb(hex) {
+    const n = parseInt((hex || '#ffffff').replace('#', ''), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
 function generateSeeds(numSeeds, centerX, centerY, clusterR, chunkSize, rng) {
     const seeds = [];
     for (let i = 0; i < numSeeds; i++) {
@@ -323,12 +328,13 @@ export default {
             ['outbreak', 'Outbreak'], ['overgrowth', 'Overgrowth'],
             ['worm', 'Worm'], ['3-worms', '3 Worms'], ['snake', 'Snake'],
         ] },
-        corruptedColor:     { default: 'r', label: 'Color', options: [
-            ['r', 'Red'], ['g', 'Green'], ['b', 'Blue'],
-            ['c', 'Cyan'], ['m', 'Magenta'], ['y', 'Yellow'], ['rgb', 'White'],
-            ['static', 'Static Noise'], ['color-static', 'Color Static'],
-            ['perimeter', 'Perimeter'], ['inside', 'Inside'], ['border', 'Image Border'],
-            ['center', 'Image Center'], ['random-img', 'Random from Image'],
+        corruptedColor:     { default: 'palette0', label: 'Color', options: [
+            ['palette0', 'Palette 1'], ['palette1', 'Palette 2'], ['palette2', 'Palette 3'],
+            ['palette3', 'Palette 4'], ['palette4', 'Palette 5'], ['palette5', 'Palette 6'],
+            ['palette6', 'Palette 7'], ['palette7', 'Palette 8'],
+            ['static', 'Static Greyscale'], ['color-static', 'Static RGBCYM'],
+            ['palette-static', 'Static Palette'],
+            ['inside', 'Inside Corruption'],
         ] },
         corruptedColorMode: { default: 'per-chunk', label: 'Color Mode', options: [['per-chunk', 'Per Chunk'], ['per-zone', 'Per Zone'], ['glitched', 'Glitched']] },
         corruptedInfect:    { default: 50,  min: 0,   max: 100,   label: 'Infect' },
@@ -416,9 +422,11 @@ void main() {
 const _gpuCache = { key: null, srcTex: null, chunkTex: null, colorTex: null };
 
 function corruptedCacheKey(p, w, h) {
+    const palKey = (p.corruptedColor?.startsWith('palette') && p._activePalette)
+        ? p._activePalette.join('|') : '';
     return [p.corruptedSeed, p.corruptedPattern, p.corruptedSeeds, p.corruptedInfect,
             p.corruptedChunkSize, p.corruptedCluster,
-            p.corruptedColor, p.corruptedColorMode, w, h].join(',');
+            p.corruptedColor, p.corruptedColorMode, w, h, palKey].join(',');
 }
 
 function flipYBuffer(buf, w, h) {
@@ -458,11 +466,15 @@ function buildChunkMapGPU(p, imgW, imgH) {
 }
 
 function computeColorTexGPU(p, chunkMap, seeds, chunkW, chunkH, srcData, imgW, imgH) {
-    const result     = new Uint8Array(chunkW * chunkH * 4);
-    const isGlitched = (p.corruptedColorMode ?? 'per-chunk') === 'glitched';
-    const solidColor = SOLID_COLORS[p.corruptedColor];
-    const isDynamic  = !solidColor && p.corruptedColor !== 'static' && p.corruptedColor !== 'color-static';
-    const isPerChunk = !isGlitched && (p.corruptedColorMode ?? 'per-chunk') === 'per-chunk';
+    const result      = new Uint8Array(chunkW * chunkH * 4);
+    const isGlitched  = (p.corruptedColorMode ?? 'per-chunk') === 'glitched';
+    const solidColor  = SOLID_COLORS[p.corruptedColor];
+    const palMatch    = !solidColor && p.corruptedColor?.match(/^palette(\d)$/);
+    const isPalStatic = p.corruptedColor === 'palette-static';
+    const isDynamic   = !solidColor && !palMatch && !isPalStatic
+                        && p.corruptedColor !== 'static' && p.corruptedColor !== 'color-static';
+    const isPerChunk  = !isGlitched && (p.corruptedColorMode ?? 'per-chunk') === 'per-chunk';
+    const palSolidRgb = palMatch ? hexToRgb(p._activePalette?.[+palMatch[1]] ?? '#ffffff') : null;
 
     if (isGlitched) {
         const rng = mulberry32(p.corruptedSeed + 77777);
@@ -515,6 +527,12 @@ function computeColorTexGPU(p, chunkMap, seeds, chunkW, chunkH, srcData, imgW, i
 
         if (solidColor) {
             [r, g, b] = solidColor;
+        } else if (palSolidRgb) {
+            [r, g, b] = palSolidRgb;
+        } else if (isPalStatic) {
+            [r, g, b] = p._activePalette
+                ? hexToRgb(p._activePalette[Math.floor(rng() * 8)])
+                : [128, 128, 128];
         } else if (isDynamic && isPerChunk && srcData && corruptedChunks.length > 0) {
             [r, g, b] = sampleFromRegion(p.corruptedColor, Math.max(1, p.corruptedChunkSize), imgW, imgH, srcData, corruptedChunks, boundaryChunks, rng, cx, cy);
         } else if (isDynamic && !isPerChunk && zoneColors) {
@@ -541,9 +559,11 @@ function corruptedBindUniforms(gl, prog, p, dstW, dstH, srcTex) {
 
         // Readback source pixels for dynamic color modes (skipped in glitched mode)
         let srcData = null;
-        const solidColor = SOLID_COLORS[p.corruptedColor];
-        const isDynamic  = !solidColor && p.corruptedColor !== 'static' && p.corruptedColor !== 'color-static';
-        const isGlitched = (p.corruptedColorMode ?? 'per-chunk') === 'glitched';
+        const solidColor    = SOLID_COLORS[p.corruptedColor];
+        const isPaletteMode = p.corruptedColor?.startsWith('palette');
+        const isDynamic     = !solidColor && !isPaletteMode
+                              && p.corruptedColor !== 'static' && p.corruptedColor !== 'color-static';
+        const isGlitched    = (p.corruptedColorMode ?? 'per-chunk') === 'glitched';
         if (isDynamic && !isGlitched && srcTex) {
             const readFbo = gl.createFramebuffer();
             gl.bindFramebuffer(gl.READ_FRAMEBUFFER, readFbo);

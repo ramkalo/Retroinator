@@ -8,7 +8,7 @@ import chromaEffect         from './chroma.js';
 import chanSatEffect        from './chanSat.js';
 //import vignetteEffect       from './vignette.js';
 import blurEffect           from './blur.js';
-import invertEffect          from './invert.js';
+import colorRemapEffect      from './invert.js';
 import { vhsEffect } from './vhs.js';
 import { textEffect } from './text.js';
 import digitalSmearEffect   from './digitalSmear.js';
@@ -104,7 +104,7 @@ export const EFFECTS = [
     //vignetteEffect,
     blurEffect,
     glowEffect,
-    invertEffect,
+    colorRemapEffect,
     vhsEffect,
     textEffect,
     matrixRainEffect,
@@ -179,7 +179,7 @@ export const EFFECT_CATALOG = [
     { name: 'grain',          label: 'Film Grain',           description: 'Analog noise and grain texture' },
     { name: 'glow',           label: 'Glow',                 description: 'Bloom halo around bright areas' },
     { name: 'hueShift',       label: 'Hue Shift',            description: 'Rotate all hues around the color wheel without quantizing' },
-    { name: 'invert',         label: 'Invert',               description: 'Color inversion with threshold' },
+    { name: 'colorRemap',     label: 'Color Remap',          description: 'Map pixel luminance or hue through a multi-stop color gradient' },
     { name: 'lineDrag',      label: 'Line Drag',            description: 'Smear pixel columns or rows from a control line across the image' },
     { name: 'matrixRain',   label: 'Matrix Rain',          description: 'Tile text characters across the image in configurable grid patterns' },
     // { name: 'moire',        label: 'Moire',                description: 'Two overlapping line grids that interfere to produce wave and band patterns' },

@@ -24,7 +24,11 @@ function renderCatalog() {
             <button class="catalog-item-add" title="Add ${entry.label}">+</button>
         `;
         item.querySelector('.catalog-item-add').addEventListener('click', () => {
+            const PALETTE_DEPENDENT = new Set(['colorRemap', 'matrixRain', 'shapeSticker', 'text', 'corrupted']);
             saveState();
+            if (PALETTE_DEPENDENT.has(entry.name) && !getStack().some(i => i.effectName === 'colorPalette')) {
+                addEffect('colorPalette');
+            }
             const inst = addEffect(entry.name);
             if (inst) _expandedId = inst.id;
             renderStackList();
