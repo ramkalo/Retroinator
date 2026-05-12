@@ -15,7 +15,7 @@ export default {
     ],
     params: {
         crtCurvatureEnabled:   { default: false, label: 'Enable' },
-        crtCurvatureStrength:  { default: 70,   min: 0,   max: 100, label: 'Strength' },
+        crtCurvatureStrength:  { default: 70,   min: -100,   max: 100, label: 'Strength' },
         crtCurvatureX:         { default: 0,   min: -50, max: 50,   label: 'Center X' },
         crtCurvatureY:         { default: 0,   min: -50, max: 50,   label: 'Center Y' },
         crtCurvatureMajor:     { default: 60,  min: 0,   max: 150,  label: 'Major Axis' },

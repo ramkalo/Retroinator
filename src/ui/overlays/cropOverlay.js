@@ -7,6 +7,15 @@ const CROP_ASPECT_MAP = { '1:1': 1, '4:3': 4 / 3, '16:9': 16 / 9, '3:2': 3 / 2, 
 
 // Replicates crop.js computeCropRegion to work in image-pixel space.
 function cropRegion(p, srcW, srcH) {
+    if (p.cropAspect === 'free') {
+        const cropW = (p.cropFreeW / 100) * srcW;
+        const cropH = (p.cropFreeH / 100) * srcH;
+        const centerX = (0.5 + p.cropX / 100) * srcW;
+        const centerY = (0.5 - p.cropY / 100) * srcH;
+        const sx = Math.max(0, Math.min(srcW - cropW, centerX - cropW / 2));
+        const sy = Math.max(0, Math.min(srcH - cropH, centerY - cropH / 2));
+        return { sx, sy, cropW, cropH, maxW: cropW, maxH: cropH };
+    }
     const scale = p.cropScale / 100;
     let maxW, maxH;
     if (p.cropAspect === 'original') {
@@ -124,6 +133,16 @@ export function onDragCrop(e, inst, rect) {
     if (state.handle === 'center') {
         setInstanceParam(state.instId, 'cropX', Math.round(Math.max(-50, Math.min(50,  (mx / W - 0.5) * 100))));
         setInstanceParam(state.instId, 'cropY', Math.round(Math.max(-50, Math.min(50, -(my / H - 0.5) * 100))));
+    } else if (inst.params.cropAspect === 'free' && state.dragAnchor) {
+        const { oppX, oppY } = state.dragAnchor;
+        const newW = Math.max(1, Math.abs(mx - oppX));
+        const newH = Math.max(1, Math.abs(my - oppY));
+        const newCX = (mx + oppX) / 2;
+        const newCY = (my + oppY) / 2;
+        setInstanceParam(state.instId, 'cropFreeW', Math.round(Math.max(1, Math.min(100, newW / W * 100))));
+        setInstanceParam(state.instId, 'cropFreeH', Math.round(Math.max(1, Math.min(100, newH / H * 100))));
+        setInstanceParam(state.instId, 'cropX', Math.round(Math.max(-50, Math.min(50,  (newCX / W - 0.5) * 100))));
+        setInstanceParam(state.instId, 'cropY', Math.round(Math.max(-50, Math.min(50, -(newCY / H - 0.5) * 100))));
     } else if (state.dragAnchor) {
         const { oppX, oppY, signX, signY } = state.dragAnchor;
         const { maxW, maxH } = computeCropRect(inst.params);
