@@ -10,16 +10,167 @@ let _paletteDragSrc = null; // { instId, index } while a palette swatch is being
 // Stores a loaded reference image per palette instance (not serialized)
 const _paletteImages = new Map();
 
-// Greedy farthest-point sampling: picks `count` maximally distinct colors from the image.
-function _pickDiverseColors(pixels, width, height, count = 8) {
-    const samples = [];
-    for (let i = 0; i < 600; i++) {
-        const x = Math.floor(Math.random() * width);
-        const y = Math.floor(Math.random() * height);
-        const off = (y * width + x) * 4;
-        if (pixels[off + 3] < 128) continue;
-        samples.push([pixels[off], pixels[off + 1], pixels[off + 2]]);
+// Overlay elements for the "Target" from-image mode, keyed by inst.id
+const _targetOverlays = new Map();
+
+function _showTargetOverlay(inst) {
+    _hideTargetOverlay(inst.id);
+
+    const mainCanvas = document.getElementById('mainCanvas');
+    if (!mainCanvas) return;
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;box-sizing:border-box;';
+    document.body.appendChild(overlay);
+
+    const box = document.createElement('div');
+    box.style.cssText = [
+        'position:absolute',
+        'pointer-events:all',
+        'box-sizing:border-box',
+        'border:2px dashed #fff',
+        'background:rgba(255,255,255,0.08)',
+        'cursor:move',
+    ].join(';');
+    overlay.appendChild(box);
+
+    const HANDLE_SIZE = 10;
+    const corners = ['nw', 'ne', 'sw', 'se'];
+    const handles = {};
+    for (const c of corners) {
+        const h = document.createElement('div');
+        h.style.cssText = [
+            'position:absolute',
+            `width:${HANDLE_SIZE}px`,
+            `height:${HANDLE_SIZE}px`,
+            'background:#fff',
+            'border:1px solid #333',
+            'box-sizing:border-box',
+            'pointer-events:all',
+        ].join(';');
+        h.dataset.corner = c;
+        if (c === 'nw') { h.style.left = '0'; h.style.top = '0'; h.style.cursor = 'nwse-resize'; h.style.transform = 'translate(-50%,-50%)'; }
+        if (c === 'ne') { h.style.right = '0'; h.style.top = '0'; h.style.cursor = 'nesw-resize'; h.style.transform = 'translate(50%,-50%)'; }
+        if (c === 'sw') { h.style.left = '0'; h.style.bottom = '0'; h.style.cursor = 'nesw-resize'; h.style.transform = 'translate(-50%,50%)'; }
+        if (c === 'se') { h.style.right = '0'; h.style.bottom = '0'; h.style.cursor = 'nwse-resize'; h.style.transform = 'translate(50%,50%)'; }
+        box.appendChild(h);
+        handles[c] = h;
     }
+
+    // Normalized box state driven by inst params
+    let nx = inst.params.paletteTargetX ?? 0.3;
+    let ny = inst.params.paletteTargetY ?? 0.3;
+    let nw = inst.params.paletteTargetW ?? 0.4;
+    let nh = inst.params.paletteTargetH ?? 0.4;
+
+    function syncOverlayPosition() {
+        const r = mainCanvas.getBoundingClientRect();
+        overlay.style.left   = r.left + 'px';
+        overlay.style.top    = r.top  + 'px';
+        overlay.style.width  = r.width  + 'px';
+        overlay.style.height = r.height + 'px';
+
+        box.style.left   = (nx * r.width)  + 'px';
+        box.style.top    = (ny * r.height) + 'px';
+        box.style.width  = (nw * r.width)  + 'px';
+        box.style.height = (nh * r.height) + 'px';
+    }
+    syncOverlayPosition();
+
+    function saveBoxParams() {
+        setInstanceParam(inst.id, 'paletteTargetX', nx);
+        setInstanceParam(inst.id, 'paletteTargetY', ny);
+        setInstanceParam(inst.id, 'paletteTargetW', nw);
+        setInstanceParam(inst.id, 'paletteTargetH', nh);
+    }
+
+    // Drag to move box
+    box.addEventListener('mousedown', (e) => {
+        if (e.target !== box) return; // don't interfere with handles
+        e.preventDefault();
+        const r = overlay.getBoundingClientRect();
+        const startMx = e.clientX, startMy = e.clientY;
+        const startNx = nx, startNy = ny;
+        function onMove(ev) {
+            const dx = (ev.clientX - startMx) / r.width;
+            const dy = (ev.clientY - startMy) / r.height;
+            nx = Math.max(0, Math.min(1 - nw, startNx + dx));
+            ny = Math.max(0, Math.min(1 - nh, startNy + dy));
+            syncOverlayPosition();
+        }
+        function onUp() {
+            saveBoxParams();
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        }
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    });
+
+    // Resize handles
+    for (const c of corners) {
+        handles[c].addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const r = overlay.getBoundingClientRect();
+            const startMx = e.clientX, startMy = e.clientY;
+            const startNx = nx, startNy = ny, startNw = nw, startNh = nh;
+            function onMove(ev) {
+                const dx = (ev.clientX - startMx) / r.width;
+                const dy = (ev.clientY - startMy) / r.height;
+                if (c === 'nw') {
+                    nx = Math.max(0, Math.min(startNx + startNw - 0.02, startNx + dx));
+                    ny = Math.max(0, Math.min(startNy + startNh - 0.02, startNy + dy));
+                    nw = startNw - (nx - startNx);
+                    nh = startNh - (ny - startNy);
+                } else if (c === 'ne') {
+                    ny = Math.max(0, Math.min(startNy + startNh - 0.02, startNy + dy));
+                    nw = Math.max(0.02, Math.min(1 - startNx, startNw + dx));
+                    nh = startNh - (ny - startNy);
+                } else if (c === 'sw') {
+                    nx = Math.max(0, Math.min(startNx + startNw - 0.02, startNx + dx));
+                    nw = startNw - (nx - startNx);
+                    nh = Math.max(0.02, Math.min(1 - startNy, startNh + dy));
+                } else if (c === 'se') {
+                    nw = Math.max(0.02, Math.min(1 - startNx, startNw + dx));
+                    nh = Math.max(0.02, Math.min(1 - startNy, startNh + dy));
+                }
+                syncOverlayPosition();
+            }
+            function onUp() {
+                saveBoxParams();
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+            }
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+        });
+    }
+
+    // Keep overlay aligned when canvas moves/resizes
+    const resizeObs = new ResizeObserver(syncOverlayPosition);
+    resizeObs.observe(mainCanvas);
+    window.addEventListener('resize', syncOverlayPosition);
+    window.addEventListener('scroll', syncOverlayPosition, true);
+
+    const token = Symbol();
+    _targetOverlays.set(inst.id, { el: overlay, resizeObs, syncOverlayPosition, token });
+    return token;
+}
+
+function _hideTargetOverlay(instId) {
+    const entry = _targetOverlays.get(instId);
+    if (!entry) return;
+    const { el, resizeObs, syncOverlayPosition } = entry;
+    resizeObs.disconnect();
+    window.removeEventListener('resize', syncOverlayPosition);
+    window.removeEventListener('scroll', syncOverlayPosition, true);
+    el.remove();
+    _targetOverlays.delete(instId);
+}
+
+// Greedy farthest-point sampling: picks `count` maximally distinct colors from a samples array.
+function _pickDiverseColors(samples, count = 8) {
     if (!samples.length) return Array.from({ length: count }, () => '#808080');
 
     const picked = [samples[0]];
@@ -40,6 +191,61 @@ function _pickDiverseColors(pixels, width, height, count = 8) {
     return picked.map(([r, g, b]) =>
         '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')
     );
+}
+
+// Collect up to 600 random pixel samples from the region defined by mode.
+function _collectSamples(pixels, width, height, mode, targetBox) {
+    const samples = [];
+    const tries = 1200;
+    let accept;
+
+    if (mode === 'perimeter') {
+        const border = Math.max(1, Math.floor(width * 0.01));
+        accept = (x, y) =>
+            x < border || x >= width - border || y < border || y >= height - border;
+    } else if (mode === 'center') {
+        const half = Math.max(1, Math.floor(width * 0.05));
+        const cx = Math.floor(width / 2), cy = Math.floor(height / 2);
+        accept = (x, y) => Math.abs(x - cx) <= half && Math.abs(y - cy) <= half;
+    } else if (mode === 'target' && targetBox) {
+        const tx = Math.round(targetBox.x * width);
+        const th = Math.max(1, Math.round(targetBox.h * height));
+        const tw = Math.max(1, Math.round(targetBox.w * width));
+        // WebGL readPixels has Y=0 at bottom; overlay CSS has Y=0 at top — flip Y
+        const ty = Math.round((1 - targetBox.y - targetBox.h) * height);
+        accept = (x, y) => x >= tx && x < tx + tw && y >= ty && y < ty + th;
+    } else {
+        accept = () => true;
+    }
+
+    for (let i = 0; i < tries && samples.length < 600; i++) {
+        const x = Math.floor(Math.random() * width);
+        const y = Math.floor(Math.random() * height);
+        if (!accept(x, y)) continue;
+        const off = (y * width + x) * 4;
+        if (pixels[off + 3] < 128) continue;
+        samples.push([pixels[off], pixels[off + 1], pixels[off + 2]]);
+    }
+    return samples;
+}
+
+function _placeRandomNodes(inst) {
+    const count = Math.min(24, inst.params.smearRandomCount ?? 8);
+    const cols = Math.ceil(Math.sqrt(count));
+    const rows = Math.ceil(count / cols);
+    const cellW = 100 / cols;
+    const cellH = 100 / rows;
+    let placed = 0;
+    for (let r = 0; r < rows && placed < count; r++) {
+        for (let c = 0; c < cols && placed < count; c++) {
+            const jx = Math.random() * 0.8 + 0.1;
+            const jy = Math.random() * 0.8 + 0.1;
+            setInstanceParam(inst.id, `smearNx${placed}`, Math.min(99, Math.round(c * cellW + jx * cellW)));
+            setInstanceParam(inst.id, `smearNy${placed}`, Math.min(99, Math.round(r * cellH + jy * cellH)));
+            placed++;
+        }
+    }
+    setInstanceParam(inst.id, 'smearNodeCount', placed);
 }
 
 // Build all parameter controls for one effect instance into a container div.
@@ -510,18 +716,67 @@ export function buildEffectBody(inst, onRebuild) {
         syncNoiseBtn();
     }
 
+    if (inst.effectName === 'digital-smear') {
+        const placementGroup = content.querySelector('[data-inst-param="smearNodeMode"]')?.closest('.control-group');
+        let insertAfter = placementGroup;
+
+        const inject = (el) => {
+            if (insertAfter) {
+                insertAfter.insertAdjacentElement('afterend', el);
+            } else {
+                const fadeHeader = content.querySelector('.control-section-header');
+                fadeHeader ? content.insertBefore(el, fadeHeader) : content.appendChild(el);
+            }
+            insertAfter = el;
+        };
+
+        if ((inst.params.smearNodeMode ?? 'manual') === 'random') {
+            const randomPanel = document.createElement('div');
+            randomPanel.className = 'control-group';
+            const randomBtn = document.createElement('button');
+            randomBtn.className = 'action-btn';
+            randomBtn.textContent = 'Randomize Nodes';
+            randomBtn.addEventListener('click', () => {
+                saveState();
+                _placeRandomNodes(inst);
+                onRebuild?.();
+            });
+            randomPanel.appendChild(randomBtn);
+            inject(randomPanel);
+        }
+
+        const panel = document.createElement('div');
+        panel.className = 'control-group';
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'action-btn';
+        clearBtn.textContent = 'Clear All Nodes';
+        clearBtn.addEventListener('click', () => {
+            saveState();
+            setInstanceParam(inst.id, 'smearNodeCount', 0);
+            onRebuild?.();
+        });
+        panel.appendChild(clearBtn);
+        const countLabel = document.createElement('span');
+        countLabel.style.cssText = 'font-size:0.75rem;color:var(--text-dim);display:block;margin-top:4px;';
+        countLabel.textContent = `Nodes placed: ${inst.params.smearNodeCount ?? 0}`;
+        panel.appendChild(countLabel);
+        inject(panel);
+    }
+
     return content;
 }
 
 function buildControl(inst, key, schema, onRebuild, labelOverride) {
+    if (schema.hidden) return null;
     const label = labelOverride ?? schema.label ?? key;
     const currentVal = inst.params[key];
 
-    // Palette action buttons row — Randomize + Build From Image
+    // Palette action buttons row — Randomize + region selector + From Image
     if (key === 'paletteRandomize') {
         const group = document.createElement('div');
         group.className = 'control-group';
         group.dataset.key = 'paletteRandomize';
+
         const row = document.createElement('div');
         row.className = 'control-row';
         row.style.gap = '6px';
@@ -541,13 +796,45 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
             if (onRebuild) onRebuild();
         });
 
+        const modeRow = document.createElement('div');
+        modeRow.className = 'control-row';
+        modeRow.style.gap = '6px';
+
+        const modeSel = document.createElement('select');
+        modeSel.className = 'select-input';
+        modeSel.style.flex = '1';
+        [['whole', 'Whole Image'], ['perimeter', 'Perimeter'], ['center', 'Center'], ['target', 'Target']].forEach(([val, lbl]) => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = lbl;
+            modeSel.appendChild(opt);
+        });
+        modeSel.value = inst.params.paletteFromImageMode ?? 'whole';
+        modeSel.addEventListener('change', () => {
+            setInstanceParam(inst.id, 'paletteFromImageMode', modeSel.value);
+            if (modeSel.value === 'target') {
+                overlayToken = _showTargetOverlay(inst);
+            } else {
+                overlayToken = null;
+                _hideTargetOverlay(inst.id);
+            }
+        });
+
         const fromImageBtn = document.createElement('button');
         fromImageBtn.className = 'btn';
         fromImageBtn.textContent = 'From Image';
         fromImageBtn.addEventListener('click', () => {
             const result = getPixelsBeforeInstance(getStack(), inst.id);
             if (!result) return;
-            const colors = _pickDiverseColors(result.pixels, result.width, result.height);
+            const mode = inst.params.paletteFromImageMode ?? 'whole';
+            const targetBox = {
+                x: inst.params.paletteTargetX ?? 0.3,
+                y: inst.params.paletteTargetY ?? 0.3,
+                w: inst.params.paletteTargetW ?? 0.4,
+                h: inst.params.paletteTargetH ?? 0.4,
+            };
+            const samples = _collectSamples(result.pixels, result.width, result.height, mode, targetBox);
+            const colors = _pickDiverseColors(samples);
             saveState();
             setInstanceParam(inst.id, 'palettePreset', 'custom');
             for (let i = 0; i < 8; i++) {
@@ -556,9 +843,29 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
             if (onRebuild) onRebuild();
         });
 
+        modeRow.appendChild(fromImageBtn);
+        modeRow.appendChild(modeSel);
         row.appendChild(randomBtn);
-        row.appendChild(fromImageBtn);
         group.appendChild(row);
+        group.appendChild(modeRow);
+
+        // Show overlay if already in target mode when control is built
+        let overlayToken = null;
+        if ((inst.params.paletteFromImageMode ?? 'whole') === 'target') {
+            overlayToken = _showTargetOverlay(inst);
+        }
+
+        // Remove overlay when this control group leaves the DOM for good.
+        // Use a token to avoid killing a newer overlay created by a concurrent rebuild.
+        const observer = new MutationObserver(() => {
+            if (!document.contains(group)) {
+                const entry = _targetOverlays.get(inst.id);
+                if (entry?.token === overlayToken) _hideTargetOverlay(inst.id);
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
         return group;
     }
 
@@ -741,7 +1048,7 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
             if (!offscreen) return;
             const ctx2d = offscreen.getContext('2d');
             const imgData = ctx2d.getImageData(0, 0, offscreen.width, offscreen.height);
-            const colors = _pickDiverseColors(imgData.data, offscreen.width, offscreen.height);
+            const colors = _pickDiverseColors(_collectSamples(imgData.data, offscreen.width, offscreen.height, 'whole', null));
             saveState();
             setInstanceParam(inst.id, 'palettePreset', 'custom');
             for (let i = 0; i < 8; i++) {

@@ -32,6 +32,25 @@ export function addEffect(effectName) {
     const instance = { id: _uid(), effectName, params: { ...defaults } };
     if (enabledKey) instance.params[enabledKey] = true;
 
+    if (effectName === 'digital-smear') {
+        const count = 10;
+        const cols = Math.ceil(Math.sqrt(count));
+        const rows = Math.ceil(count / cols);
+        const cellW = 100 / cols;
+        const cellH = 100 / rows;
+        let placed = 0;
+        for (let r = 0; r < rows && placed < count; r++) {
+            for (let c = 0; c < cols && placed < count; c++) {
+                const jx = Math.random() * 0.8 + 0.1;
+                const jy = Math.random() * 0.8 + 0.1;
+                instance.params[`smearNx${placed}`] = Math.min(99, Math.round(c * cellW + jx * cellW));
+                instance.params[`smearNy${placed}`] = Math.min(99, Math.round(r * cellH + jy * cellH));
+                placed++;
+            }
+        }
+        instance.params.smearNodeCount = placed;
+    }
+
     if (effectName === 'viewport') {
         const entryInst = { id: _uid(), effectName: 'viewportEntry', params: {} };
         _stack.push(entryInst);

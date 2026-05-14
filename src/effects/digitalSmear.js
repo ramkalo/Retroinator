@@ -3,66 +3,160 @@ import { buildFadeControl, buildBlendControl } from './controls/index.js';
 const fade  = buildFadeControl('digitalSmear');
 const blend = buildBlendControl('digitalSmear');
 
+const NODE_SLOTS = 24;
+const nodeParamKeys = Array.from({ length: NODE_SLOTS }, (_, i) => [`smearNx${i}`, `smearNy${i}`]).flat();
+const nodeParamDefs = Object.fromEntries(
+    Array.from({ length: NODE_SLOTS }, (_, i) => [
+        [`smearNx${i}`, { default: 0, min: 0, max: 100 }],
+        [`smearNy${i}`, { default: 0, min: 0, max: 100 }],
+    ]).flat()
+);
+
 export default {
     name:  'digital-smear',
     label: 'Digital Smear',
     pass:  'pre-crt',
-    paramKeys: ['smearWidth', 'smearDirection', 'smearShift', ...fade.paramKeys, ...blend.paramKeys],
-    handleParams: [...fade.handleParams],
-    uiGroups: [
-        { keys: ['smearWidth', 'smearDirection', 'smearShift'] },
-        fade.uiGroup,
-        blend.uiGroup,
+    paramKeys: [
+        'smearMode',
+        'smearRadius', 'smearNodeMode', 'smearRandomCount',
+        'smearLinearDx', 'smearLinearDy', 'smearRotAngle', 'smearRadialAmt',
+        ...fade.paramKeys, ...blend.paramKeys,
     ],
+    handleParams: [
+        'smearCenterX', 'smearCenterY', 'smearNodeCount',
+        ...nodeParamKeys,
+        ...fade.handleParams,
+    ],
+    uiGroups: (p) => {
+        const mode = p.smearMode ?? 'linear';
+        const groups = [
+            { keys: ['smearMode'] },
+            { keys: ['smearNodeMode'] },
+        ];
+        if ((p.smearNodeMode ?? 'manual') === 'random') {
+            groups.push({ keys: ['smearRandomCount'] });
+        }
+        groups.push({ keys: ['smearRadius'] });
+        if (mode === 'linear')     groups.push({ keys: ['smearLinearDx', 'smearLinearDy'] });
+        if (mode === 'rotational') groups.push({ keys: ['smearRotAngle'] });
+        if (mode === 'radial')     groups.push({ keys: ['smearRadialAmt'] });
+        groups.push(fade.uiGroup, blend.uiGroup);
+        return groups;
+    },
     params: {
-        smearEnabled:   { default: false, label: 'Enable' },
-        smearWidth:     { default: 15,  min: 5,  max: 50,  label: 'Width' },
-        smearDirection: { default: 'ltr', label: 'Direction', options: [['ltr', 'Left → Right'], ['rtl', 'Right → Left'], ['ttb', 'Top → Bottom'], ['btu', 'Bottom → Top']] },
-        smearShift:     { default: 0,   min: 0,  max: 100, label: 'Shift' },
+        smearEnabled: { default: false, label: 'Enable' },
+        smearMode: {
+            default: 'linear', label: 'Mode',
+            options: [['linear','Linear'],['rotational','Rotational'],['radial','Radial']],
+        },
+
+        // Node shared
+        smearNodeCount:   { default: 0,  min: 0,   max: 24 },
+        smearRadius:      { default: 15, min: 1,   max: 100, label: 'Radius' },
+        smearNodeMode:    { default: 'random', label: 'Placement',
+            options: [['manual','Manual'],['random','Random']] },
+        smearRandomCount: { default: 8,  min: 1,   max: 24,  label: 'Node Count' },
+
+        // Center handle
+        smearCenterX: { default: 50, min: 0, max: 100 },
+        smearCenterY: { default: 50, min: 0, max: 100 },
+
+        // 24 node slots
+        ...nodeParamDefs,
+
+        // Linear mode
+        smearLinearDx: { default: 50, min: -100, max: 100, label: 'Shift X' },
+        smearLinearDy: { default: 0, min: -100, max: 100, label: 'Shift Y' },
+
+        // Rotational mode
+        smearRotAngle: { default: 45, min: -180, max: 180, label: 'Angle' },
+
+        // Radial mode
+        smearRadialAmt: { default: 50, min: -100, max: 100, label: 'Amount' },
+
         ...fade.params,
         ...blend.params,
     },
-    enabled:  (p) => p.smearEnabled && p.smearWidth > 0,
+    enabled: (p) => p.smearEnabled && (p.smearNodeCount ?? 0) > 0,
     overlays: { fade: fade.overlay },
     bindUniforms: (gl, prog, p) => {
-        const loc = prog._locs['smearDirection'];
-        if (loc != null) gl.uniform1i(loc, { ltr: 0, rtl: 1, ttb: 2, btt: 3 }[p.smearDirection] ?? 0);
+        const locs = prog._locs;
+        const si = (k, v) => { if (locs[k] != null) gl.uniform1i(locs[k], v); };
+
+        si('smearMode',      { linear: 0, rotational: 1, radial: 2 }[p.smearMode] ?? 0);
+        si('smearNodeCount', p.smearNodeCount ?? 0);
+
+        if (locs['smearCenter'] != null) {
+            gl.uniform2f(locs['smearCenter'],
+                (p.smearCenterX ?? 50) / 100,
+                1.0 - (p.smearCenterY ?? 50) / 100
+            );
+        }
+
+        const count = Math.min(NODE_SLOTS, p.smearNodeCount ?? 0);
+        const nodes = new Float32Array(NODE_SLOTS * 2);
+        for (let i = 0; i < count; i++) {
+            nodes[i * 2]     =  (p[`smearNx${i}`] ?? 0) / 100;
+            nodes[i * 2 + 1] = 1.0 - (p[`smearNy${i}`] ?? 0) / 100;
+        }
+        if (locs['smearNodes[0]'] != null) gl.uniform2fv(locs['smearNodes[0]'], nodes);
+
         fade.bindUniforms(gl, prog, p);
         blend.bindUniforms(gl, prog, p);
     },
     glsl: `
-uniform float smearWidth;
-uniform int   smearDirection;
-uniform float smearShift;
+uniform int   smearMode;       // 0=linear 1=rotational 2=radial
+uniform vec2  smearNodes[24];
+uniform int   smearNodeCount;
+uniform float smearRadius;
+uniform float smearLinearDx;
+uniform float smearLinearDy;
+uniform float smearRotAngle;
+uniform float smearRadialAmt;
+uniform vec2  smearCenter;
 ${fade.glsl}
 ${blend.glsl}
-float wavesFormula(float xN, float yN) {
-    return
-        3.2 * sin(xN + 0.3 * cos(2.1 * xN) + yN) +
-        2.1 * cos(0.73 * xN - 1.4 + yN * 0.7) * sin(0.5 * xN + 0.9 + yN * 0.5) +
-        1.8 * sin(2.3 * xN + cos(xN) + yN * 0.3) * exp(-0.02 * pow(xN - 2.0, 2.0)) +
-        0.9 * cos(3.7 * xN - 0.8 + yN * 0.4) * (1.0 / (1.0 + 0.15 * xN * xN)) +
-        1.2 * sin(0.41 * xN * xN - xN + yN * 0.6);
+
+float smearGauss(float d, float sigma) {
+    return exp(-(d * d) / (2.0 * sigma * sigma));
 }
 
 void main() {
     vec4 c = texture(uTex, vUV);
-    float amp   = smearWidth / 10.0;
-    float phase = smearShift / 100.0 * 20.0;
-    vec2 uv = vUV;
 
-    if (smearDirection == 0 || smearDirection == 1) {
-        float xNorm = (1.0 - vUV.y) * 10.0 + phase;
-        float yNorm = vUV.x * 8.0;
-        float wave  = wavesFormula(xNorm, yNorm);
-        float dx    = wave * amp * (smearDirection == 0 ? 1.0 : -1.0);
-        uv.x = clamp(vUV.x + dx / uResolution.x, 0.0, 1.0);
-    } else {
-        float xNorm = vUV.x * 10.0 + phase;
-        float yNorm = (1.0 - vUV.y) * 8.0;
-        float wave  = wavesFormula(xNorm, yNorm);
-        float dy    = wave * amp * (smearDirection == 2 ? 1.0 : -1.0);
-        uv.y = clamp(vUV.y - dy / uResolution.y, 0.0, 1.0);
+    float sigma    = smearRadius / 100.0 * 0.25;
+    vec2  totalDisp = vec2(0.0);
+    float totalW   = 0.0;
+
+    for (int i = 0; i < 24; i++) {
+        if (i >= smearNodeCount) break;
+        vec2  nPos = smearNodes[i];
+        float d    = distance(vUV, nPos);
+        float w    = smearGauss(d, sigma);
+
+        vec2 disp = vec2(0.0);
+        if (smearMode == 0) {
+            disp = -vec2(smearLinearDx, smearLinearDy) / 100.0 * 0.15;
+        } else if (smearMode == 1) {
+            vec2  rel    = nPos - smearCenter;
+            float rotRad = smearRotAngle * 3.14159265 / 180.0;
+            float cosR   = cos(rotRad);
+            float sinR   = sin(rotRad);
+            vec2  rotated = vec2(rel.x * cosR - rel.y * sinR,
+                                 rel.x * sinR + rel.y * cosR);
+            disp = (rotated - rel) * 0.5;
+        } else {
+            vec2 dir = normalize(nPos - smearCenter + vec2(0.0001));
+            disp = dir * smearRadialAmt / 100.0 * 0.15;
+        }
+
+        totalDisp += w * disp;
+        totalW    += w;
+    }
+
+    vec2 uv = vUV;
+    if (totalW > 0.001) {
+        uv = clamp(vUV + totalDisp / max(totalW, 1.0), vec2(0.0), vec2(1.0));
     }
 
     float weight  = ${fade.fnName}();

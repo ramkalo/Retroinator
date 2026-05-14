@@ -59,9 +59,11 @@ void main() {
     // Adjustments (working in 0-255 range to match CPU code)
     float lum = 0.299*r + 0.587*g + 0.114*b;
     float cf  = (contrast + 100.0) / 100.0;
+    float bf  = 1.0 + brightness / 100.0;
     if (highlights != 0.0) { float hf = highlights*(lum/255.0)*0.3; r+=hf; g+=hf; b+=hf; }
     if (shadows    != 0.0) { float sf = shadows*((255.0-lum)/255.0)*0.3; r+=sf; g+=sf; b+=sf; }
-    r = r*cf + brightness; g = g*cf + brightness; b = b*cf + brightness;
+    r = r*bf; g = g*bf; b = b*bf;
+    r = (r-128.0)*cf + 128.0; g = (g-128.0)*cf + 128.0; b = (b-128.0)*cf + 128.0;
     if (saturation != 0.0) {
         float sat = 1.0 + saturation/100.0;
         float gray = 0.299*r + 0.587*g + 0.114*b;

@@ -21,6 +21,7 @@ import { drawTextOverlay,    hitTestText,            onDragText,          textCo
 import { drawMatrixRain,       hitTestMatrixRain,       onDragMatrixRain   } from './overlays/matrixRainOverlay.js';
 import { drawViewport,       hitTestViewport,        onDragViewport,      resetPolygonVertices } from './overlays/viewportOverlay.js';
 import { drawKaleidoscope, hitTestKaleidoscope, onDragKaleidoscope, resetKaleidoscopeVertices } from './overlays/kaleidoscopeOverlay.js';
+import { drawDigitalSmear, hitTestDigitalSmear, onDragDigitalSmear, deleteSmearNode } from './overlays/digitalSmearOverlay.js';
 
 // ── onStackChange redraw dispatcher ──────────────────────────────────────────
 
@@ -82,6 +83,7 @@ onStackChange((key) => {
         }
         drawViewport(p);
     }
+    if (state.mode === 'digitalSmear') drawDigitalSmear(inst.params);
 });
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -265,6 +267,15 @@ export function hideKaleidoscopeOverlay() {
     if (state.mode === 'kaleidoscope') _hideActive();
 }
 
+export function showDigitalSmearOverlay(inst) {
+    _activate('digitalSmear', inst, 'smearCenterX', 'smearCenterY');
+    drawDigitalSmear(inst.params);
+}
+
+export function hideDigitalSmearOverlay() {
+    if (state.mode === 'digitalSmear') _hideActive();
+}
+
 // ── Activation / deactivation ─────────────────────────────────────────────────
 
 function _activate(mode, inst, xKey, yKey) {
@@ -353,6 +364,14 @@ function getCursorForMode(mode, h) {
                 : h === 'fadeEdgeW' ? 'ew-resize'
                 : h === 'fadeEdgeH' ? 'ns-resize'
                 : h ? 'nwse-resize' : 'default';
+        case 'digitalSmear': {
+            if (h === 'center' || (h && h.startsWith('node:'))) return 'grab';
+            const dsInst = getStack().find(i => i.id === state.instId);
+            const dsp = dsInst?.params ?? {};
+            if ((dsp.smearNodeMode ?? 'manual') === 'manual'
+                && (dsp.smearNodeCount ?? 0) < 24) return 'crosshair';
+            return 'default';
+        }
         default:
             return h ? 'grab' : 'default';
     }
@@ -372,6 +391,7 @@ const HIT_FNS = {
     text:           hitTestText,
     shapeSticker:   hitTestShapeSticker,
     matrixRain:     hitTestMatrixRain,
+    digitalSmear:   hitTestDigitalSmear,
 };
 
 const DRAG_FNS = {
@@ -387,6 +407,7 @@ const DRAG_FNS = {
     text:           onDragText,
     shapeSticker:   onDragShapeSticker,
     matrixRain:     onDragMatrixRain,
+    digitalSmear:   onDragDigitalSmear,
 };
 
 const DRAW_FNS = {
@@ -404,6 +425,7 @@ const DRAW_FNS = {
     shapeSticker:   drawShapeSticker,
     corrupted:      drawCorrupted,
     crtCurvature:   drawCRTCurvature,
+    digitalSmear:   drawDigitalSmear,
 };
 
 function onHover(e) {
@@ -416,6 +438,26 @@ function onHover(e) {
 function onDown(e) {
     const hitFn = HIT_FNS[state.mode];
     const h = hitFn ? hitFn(e) : (hitTestCentre(e) ? 'center' : null);
+
+    if (!h && state.mode === 'digitalSmear') {
+        const inst = getStack().find(i => i.id === state.instId);
+        if (inst) {
+            const p = inst.params;
+            if ((p.smearNodeMode ?? 'manual') === 'manual'
+                && (p.smearNodeCount ?? 0) < 24) {
+                const rect = canvas.getBoundingClientRect();
+                const W = uiOverlay.width, H = uiOverlay.height;
+                const nx = Math.round(Math.max(0, Math.min(100, ((e.clientX - rect.left) / W) * 100)));
+                const ny = Math.round(Math.max(0, Math.min(100, ((e.clientY - rect.top)  / H) * 100)));
+                const idx = p.smearNodeCount ?? 0;
+                saveState();
+                setInstanceParam(state.instId, `smearNx${idx}`, nx);
+                setInstanceParam(state.instId, `smearNy${idx}`, ny);
+                setInstanceParam(state.instId, 'smearNodeCount', idx + 1);
+            }
+        }
+    }
+
     if (!h) return;
 
     state.handle   = h;
@@ -457,11 +499,13 @@ function onDown(e) {
         };
     }
 
+    state.hasDragged = false;
     uiOverlay.addEventListener('pointermove', onDrag);
     uiOverlay.addEventListener('pointerup',   onUp);
 }
 
 function onDrag(e) {
+    state.hasDragged = true;
     const inst = getStack().find(i => i.id === state.instId);
     if (!inst) return;
     const rect = canvas.getBoundingClientRect();
@@ -480,14 +524,27 @@ function onDrag(e) {
 }
 
 function onUp() {
+    const wasClick   = !state.hasDragged;
+    const handle     = state.handle;
+    const mode       = state.mode;
+    const instId     = state.instId;
+
     state.dragging   = false;
     state.handle     = null;
     state.dragAnchor = null;
+    state.hasDragged = false;
     uiOverlay.style.cursor = 'default';
     uiOverlay.removeEventListener('pointermove', onDrag);
     uiOverlay.removeEventListener('pointerup',   onUp);
     saveState();
-    const inst = getStack().find(i => i.id === state.instId);
+
+    const inst = getStack().find(i => i.id === instId);
     if (!inst) return;
-    DRAW_FNS[state.mode]?.(inst.params);
+
+    if (wasClick && mode === 'digitalSmear' && handle?.startsWith('node:')) {
+        const idx = parseInt(handle.split(':')[1]);
+        deleteSmearNode(instId, idx, inst.params);
+    }
+
+    DRAW_FNS[mode]?.(getStack().find(i => i.id === instId)?.params ?? inst.params);
 }

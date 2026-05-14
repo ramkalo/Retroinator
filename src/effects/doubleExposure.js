@@ -20,7 +20,7 @@ export default {
         ...fade.handleParams,
     ],
     uiGroups: [
-        { keys: ['doubleExposureMixMode', 'doubleExposureOrigOpacity', 'doubleExposureMixOpacity'] },
+        { keys: ['doubleExposureOrigOpacity', 'doubleExposureMixOpacity'] },
         fade.uiGroup,
         blend.uiGroup,
     ],
