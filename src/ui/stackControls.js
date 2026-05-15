@@ -3,7 +3,7 @@ import { setInstanceParam, getStack } from '../state/effectStack.js';
 import { saveState } from '../state/undo.js';
 import { getCustomFonts } from '../state/customFonts.js';
 import { getPixelsBeforeInstance } from '../renderer/webgl.js';
-import { blendMapImage } from '../renderer/glstate.js';
+import { blendMapImage, canvas } from '../renderer/glstate.js';
 import { toggleBlendMapOverlay, hideBlendMapOverlay } from './canvasPicker.js';
 
 let activeSliderGroup = null;
@@ -759,6 +759,121 @@ export function buildEffectBody(inst, onRebuild) {
         syncNoiseBtn();
     }
 
+    if (inst.effectName === 'mesh') {
+        const colorModeSelect = content.querySelector('[data-inst-param="meshLineColorMode"]');
+        if (colorModeSelect) {
+            function styleMeshColorSelect() {
+                const stack = getStack();
+                const pos = stack.findIndex(s => s.id === inst.id);
+                let pal = null;
+                for (let i = pos - 1; i >= 0; i--) {
+                    if (stack[i].effectName === 'colorPalette' && stack[i].params.paletteEnabled) {
+                        pal = Array.from({ length: 8 }, (_, j) => stack[i].params[`palette${j}`]);
+                        break;
+                    }
+                }
+                for (const opt of colorModeSelect.options) {
+                    const m = opt.value.match(/^palette(\d)$/);
+                    if (m && pal) {
+                        const hex = pal[parseInt(m[1])];
+                        opt.style.backgroundColor = hex ?? '';
+                        const r = parseInt(hex?.slice(1, 3), 16);
+                        const g = parseInt(hex?.slice(3, 5), 16);
+                        const b = parseInt(hex?.slice(5, 7), 16);
+                        opt.style.color = (0.299 * r + 0.587 * g + 0.114 * b) > 128 ? '#000' : '#fff';
+                    } else {
+                        opt.style.backgroundColor = '';
+                        opt.style.color = '';
+                    }
+                }
+            }
+            styleMeshColorSelect();
+            document.addEventListener('paletteupdate', function onPU() {
+                if (!document.contains(colorModeSelect)) {
+                    document.removeEventListener('paletteupdate', onPU);
+                    return;
+                }
+                styleMeshColorSelect();
+            });
+        }
+    }
+
+    if (inst.effectName === 'tunnel') {
+        const MID_KEYS     = ['tunnelMid0ColorMode','tunnelMid1ColorMode','tunnelMid2ColorMode','tunnelMid3ColorMode','tunnelMid4ColorMode','tunnelMid5ColorMode'];
+        const MID_FALLBACKS = ['palette1','palette2','palette3','palette4','palette5','palette6'];
+        const lastMidColors = {};
+
+        const getPal = () => {
+            const stack = getStack();
+            const pos = stack.findIndex(s => s.id === inst.id);
+            for (let i = pos - 1; i >= 0; i--) {
+                if (stack[i].effectName === 'colorPalette' && stack[i].params.paletteEnabled)
+                    return Array.from({ length: 8 }, (_, j) => stack[i].params[`palette${j}`]);
+            }
+            return null;
+        };
+
+        const styleSel = (selectEl) => {
+            if (!selectEl) return;
+            const pal = getPal();
+            for (const opt of selectEl.options) {
+                const m = opt.value.match(/^palette(\d)$/);
+                if (m && pal) {
+                    const hex = pal[parseInt(m[1])];
+                    opt.style.backgroundColor = hex ?? '';
+                    const r = parseInt(hex?.slice(1,3),16), g = parseInt(hex?.slice(3,5),16), b = parseInt(hex?.slice(5,7),16);
+                    opt.style.color = (0.299*r + 0.587*g + 0.114*b) > 128 ? '#000' : '#fff';
+                } else {
+                    opt.style.backgroundColor = '';
+                    opt.style.color = '';
+                }
+            }
+        };
+
+        const originSel = content.querySelector('[data-inst-param="tunnelOriginColorMode"]');
+        const finalSel  = content.querySelector('[data-inst-param="tunnelFinalColorMode"]');
+        styleSel(originSel);
+        styleSel(finalSel);
+
+        for (let mi = 0; mi < 6; mi++) {
+            const colorKey = MID_KEYS[mi];
+            const selectEl = content.querySelector(`[data-inst-param="${colorKey}"]`);
+            const group    = selectEl?.closest('.control-group');
+            if (!group) continue;
+            const row = group.querySelector('.control-row');
+            if (!row) continue;
+
+            lastMidColors[colorKey] = inst.params[colorKey] !== 'none' ? inst.params[colorKey] : MID_FALLBACKS[mi];
+            styleSel(selectEl);
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = inst.params[colorKey] !== 'none';
+            cb.style.cssText = 'flex-shrink:0;margin-right:4px;cursor:pointer;';
+            row.insertBefore(cb, row.firstChild);
+            if (selectEl) selectEl.disabled = inst.params[colorKey] === 'none';
+
+            cb.addEventListener('change', () => {
+                saveState();
+                if (cb.checked) {
+                    setInstanceParam(inst.id, colorKey, lastMidColors[colorKey]);
+                    if (selectEl) selectEl.disabled = false;
+                } else {
+                    if (selectEl && selectEl.value !== 'none') lastMidColors[colorKey] = selectEl.value;
+                    setInstanceParam(inst.id, colorKey, 'none');
+                    if (selectEl) selectEl.disabled = true;
+                }
+                if (onRebuild) onRebuild();
+            });
+        }
+
+        document.addEventListener('paletteupdate', function onPU() {
+            const all = [originSel, finalSel, ...MID_KEYS.map(k => content.querySelector(`[data-inst-param="${k}"]`))];
+            if (all.every(s => !s || !document.contains(s))) { document.removeEventListener('paletteupdate', onPU); return; }
+            all.forEach(styleSel);
+        });
+    }
+
     if (inst.effectName === 'digital-smear') {
         const placementGroup = content.querySelector('[data-inst-param="smearNodeMode"]')?.closest('.control-group');
         let insertAfter = placementGroup;
@@ -1122,6 +1237,34 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         return group;
     }
 
+    // Reset Box button for mesh effect
+    if (key === 'meshResetBox') {
+        const group = document.createElement('div');
+        group.className = 'control-group';
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = label;
+        btn.addEventListener('click', () => {
+            saveState();
+            setInstanceParam(inst.id, 'meshTLx', 10);
+            setInstanceParam(inst.id, 'meshTLy', 10);
+            setInstanceParam(inst.id, 'meshTRx', 90);
+            setInstanceParam(inst.id, 'meshTRy', 10);
+            setInstanceParam(inst.id, 'meshBRx', 90);
+            setInstanceParam(inst.id, 'meshBRy', 90);
+            setInstanceParam(inst.id, 'meshBLx', 10);
+            setInstanceParam(inst.id, 'meshBLy', 90);
+            setInstanceParam(inst.id, 'meshScale', 1);
+            setInstanceParam(inst.id, 'meshRotate', 0);
+            if (onRebuild) onRebuild();
+        });
+        row.appendChild(btn);
+        group.appendChild(row);
+        return group;
+    }
+
     // Reset Box button for text effect
     if (key === 'textBoxReset') {
         const group = document.createElement('div');
@@ -1467,7 +1610,240 @@ function buildControl(inst, key, schema, onRebuild, labelOverride) {
         });
         row.appendChild(labelEl);
         row.appendChild(input);
-        
+
+        if (schema.info) {
+            const infoBtn = document.createElement('button');
+            infoBtn.className = 'btn';
+            infoBtn.textContent = 'i';
+            infoBtn.title = 'Formula help';
+            infoBtn.style.cssText = 'width:20px;height:20px;padding:0;border-radius:50%;font-size:0.7rem;font-style:italic;font-weight:700;flex-shrink:0;line-height:1;';
+            infoBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.querySelectorAll('.formula-info-popup').forEach(el => el.remove());
+                const popup = document.createElement('div');
+                popup.className = 'formula-info-popup';
+                popup.style.cssText = [
+                    'position:fixed',
+                    'z-index:10000',
+                    'background:var(--bg-2,#1a1a1a)',
+                    'border:1px solid var(--border,#444)',
+                    'border-radius:6px',
+                    'padding:12px 14px',
+                    'font-size:0.78rem',
+                    'line-height:1.6',
+                    'color:var(--text,#eee)',
+                    'box-shadow:0 4px 20px rgba(0,0,0,0.5)',
+                    'max-width:260px',
+                ].join(';');
+                popup.innerHTML = schema.info;
+                document.body.appendChild(popup);
+                const btnRect = infoBtn.getBoundingClientRect();
+                let top = btnRect.bottom + 6;
+                let left = btnRect.left;
+                if (left + 270 > window.innerWidth) left = window.innerWidth - 275;
+                if (top + 220 > window.innerHeight) top = btnRect.top - 226;
+                popup.style.top = top + 'px';
+                popup.style.left = left + 'px';
+                const dismiss = (ev) => {
+                    if (!popup.contains(ev.target) && ev.target !== infoBtn) {
+                        popup.remove();
+                        document.removeEventListener('pointerdown', dismiss, true);
+                    }
+                };
+                setTimeout(() => document.addEventListener('pointerdown', dismiss, true), 0);
+            });
+            row.appendChild(infoBtn);
+        }
+
+        group.appendChild(row);
+        return group;
+    }
+
+    // meshScale — scales all 8 vertices relative to their centroid
+    if (key === 'meshScale') {
+        const group = document.createElement('div');
+        group.className = 'control-group slider-group';
+        const row = document.createElement('div');
+        row.className = 'control-row';
+        const labelEl = document.createElement('span');
+        labelEl.className = 'control-label';
+        labelEl.textContent = label;
+        const step = schema.step ?? 0.05;
+        const decBtn = document.createElement('button');
+        decBtn.className = 'slider-btn slider-btn--dec';
+        decBtn.textContent = '−';
+        decBtn.tabIndex = -1;
+        const trackWrapper = document.createElement('div');
+        trackWrapper.className = 'slider-track-wrapper';
+        const range = document.createElement('input');
+        range.type = 'range';
+        range.min = schema.min;
+        range.max = schema.max;
+        range.step = step;
+        range.value = currentVal;
+        range.dataset.instParam = key;
+        const defaultVal = schema.default ?? 1;
+        const pct = Math.max(2, Math.min(98, ((defaultVal - schema.min) / (schema.max - schema.min)) * 100));
+        const resetBtn = document.createElement('button');
+        resetBtn.className = 'slider-btn slider-btn--reset';
+        resetBtn.textContent = '↺';
+        resetBtn.title = `Reset to ${defaultVal}`;
+        resetBtn.tabIndex = -1;
+        resetBtn.style.left = `${pct}%`;
+        const incBtn = document.createElement('button');
+        incBtn.className = 'slider-btn slider-btn--inc';
+        incBtn.textContent = '+';
+        incBtn.tabIndex = -1;
+        trackWrapper.appendChild(range);
+        trackWrapper.appendChild(resetBtn);
+        const valueSpan = document.createElement('span');
+        valueSpan.className = 'control-value';
+        valueSpan.textContent = currentVal;
+
+        function applyMeshScale(newScale) {
+            const clamped = Math.min(schema.max, Math.max(schema.min, newScale));
+            const prevScale = inst.params.meshScale ?? 1;
+            const ratio = prevScale !== 0 ? clamped / prevScale : 1;
+            const tlx = inst.params.meshTLx ?? 10, tly = inst.params.meshTLy ?? 10;
+            const trx = inst.params.meshTRx ?? 90, try_ = inst.params.meshTRy ?? 10;
+            const brx = inst.params.meshBRx ?? 90, bry = inst.params.meshBRy ?? 90;
+            const blx = inst.params.meshBLx ?? 10, bly = inst.params.meshBLy ?? 90;
+            const cx = (tlx + trx + brx + blx) / 4;
+            const cy = (tly + try_ + bry + bly) / 4;
+            setInstanceParam(inst.id, 'meshTLx', cx + (tlx - cx) * ratio);
+            setInstanceParam(inst.id, 'meshTLy', cy + (tly - cy) * ratio);
+            setInstanceParam(inst.id, 'meshTRx', cx + (trx - cx) * ratio);
+            setInstanceParam(inst.id, 'meshTRy', cy + (try_ - cy) * ratio);
+            setInstanceParam(inst.id, 'meshBRx', cx + (brx - cx) * ratio);
+            setInstanceParam(inst.id, 'meshBRy', cy + (bry - cy) * ratio);
+            setInstanceParam(inst.id, 'meshBLx', cx + (blx - cx) * ratio);
+            setInstanceParam(inst.id, 'meshBLy', cy + (bly - cy) * ratio);
+            setInstanceParam(inst.id, key, clamped);
+            range.value = clamped;
+            valueSpan.textContent = clamped;
+        }
+
+        function activateScaleGroup() {
+            if (activeSliderGroup === group) return;
+            if (activeSliderGroup) activeSliderGroup.classList.remove('slider-group--active');
+            activeSliderGroup = group;
+            group.classList.add('slider-group--active');
+        }
+
+        range.addEventListener('mousedown', activateScaleGroup);
+        range.addEventListener('touchstart', activateScaleGroup, { passive: true });
+        range.addEventListener('focus', activateScaleGroup);
+        range.addEventListener('input', () => { applyMeshScale(parseFloat(range.value)); });
+        decBtn.addEventListener('click', () => { activateScaleGroup(); applyMeshScale(parseFloat(range.value) - step); });
+        incBtn.addEventListener('click', () => { activateScaleGroup(); applyMeshScale(parseFloat(range.value) + step); });
+        resetBtn.addEventListener('click', () => { activateScaleGroup(); applyMeshScale(defaultVal); });
+
+        row.appendChild(labelEl);
+        row.appendChild(decBtn);
+        row.appendChild(trackWrapper);
+        row.appendChild(incBtn);
+        row.appendChild(valueSpan);
+        group.appendChild(row);
+        return group;
+    }
+
+    // meshRotate — rotates all 8 vertices around their centroid
+    if (key === 'meshRotate') {
+        const group = document.createElement('div');
+        group.className = 'control-group slider-group';
+        const row = document.createElement('div');
+        row.className = 'control-row';
+
+        const labelEl = document.createElement('span');
+        labelEl.className = 'control-label';
+        labelEl.textContent = label;
+
+        const step = schema.step ?? 1;
+        const defaultVal = schema.default ?? 0;
+
+        const decBtn = document.createElement('button');
+        decBtn.className = 'slider-btn slider-btn--dec';
+        decBtn.textContent = '−';
+        decBtn.tabIndex = -1;
+
+        const trackWrapper = document.createElement('div');
+        trackWrapper.className = 'slider-track-wrapper';
+
+        const range = document.createElement('input');
+        range.type = 'range';
+        range.min = schema.min;
+        range.max = schema.max;
+        range.step = step;
+        range.value = currentVal;
+        range.dataset.instParam = key;
+
+        const resetBtn = document.createElement('button');
+        resetBtn.className = 'slider-btn slider-btn--reset';
+        resetBtn.title = 'Reset';
+        resetBtn.textContent = '↺';
+
+        const incBtn = document.createElement('button');
+        incBtn.className = 'slider-btn slider-btn--inc';
+        incBtn.textContent = '+';
+        incBtn.tabIndex = -1;
+
+        const valueSpan = document.createElement('span');
+        valueSpan.className = 'control-value';
+        valueSpan.textContent = currentVal;
+
+        trackWrapper.appendChild(range);
+        trackWrapper.appendChild(resetBtn);
+
+        function applyMeshRotate(newAngle) {
+            const clamped = Math.min(schema.max, Math.max(schema.min, newAngle));
+            const prevAngle = inst.params.meshRotate ?? 0;
+            const delta = (clamped - prevAngle) * Math.PI / 180;
+            const cosD = Math.cos(delta), sinD = Math.sin(delta);
+            const W = canvas.width, H = canvas.height;
+            // Convert % → px, rotate, convert px → %
+            const tlx = inst.params.meshTLx ?? 10, tly = inst.params.meshTLy ?? 10;
+            const trx = inst.params.meshTRx ?? 90, try_ = inst.params.meshTRy ?? 10;
+            const brx = inst.params.meshBRx ?? 90, bry = inst.params.meshBRy ?? 90;
+            const blx = inst.params.meshBLx ?? 10, bly = inst.params.meshBLy ?? 90;
+            const cxPx = (tlx + trx + brx + blx) / 4 / 100 * W;
+            const cyPx = (tly + try_ + bry + bly) / 4 / 100 * H;
+            const rot = (xPct, yPct) => {
+                const dx = xPct / 100 * W - cxPx, dy = yPct / 100 * H - cyPx;
+                return {
+                    x: (cxPx + dx * cosD - dy * sinD) / W * 100,
+                    y: (cyPx + dx * sinD + dy * cosD) / H * 100,
+                };
+            };
+            const tl = rot(tlx, tly), tr = rot(trx, try_), br = rot(brx, bry), bl = rot(blx, bly);
+            setInstanceParam(inst.id, 'meshTLx', tl.x); setInstanceParam(inst.id, 'meshTLy', tl.y);
+            setInstanceParam(inst.id, 'meshTRx', tr.x); setInstanceParam(inst.id, 'meshTRy', tr.y);
+            setInstanceParam(inst.id, 'meshBRx', br.x); setInstanceParam(inst.id, 'meshBRy', br.y);
+            setInstanceParam(inst.id, 'meshBLx', bl.x); setInstanceParam(inst.id, 'meshBLy', bl.y);
+            setInstanceParam(inst.id, key, clamped);
+            range.value = clamped;
+            valueSpan.textContent = clamped;
+        }
+
+        function activateRotateGroup() {
+            if (activeSliderGroup === group) return;
+            if (activeSliderGroup) activeSliderGroup.classList.remove('slider-group--active');
+            activeSliderGroup = group;
+            group.classList.add('slider-group--active');
+        }
+
+        range.addEventListener('mousedown', activateRotateGroup);
+        range.addEventListener('touchstart', activateRotateGroup, { passive: true });
+        range.addEventListener('focus', activateRotateGroup);
+        range.addEventListener('input', () => { applyMeshRotate(parseFloat(range.value)); });
+        decBtn.addEventListener('click', () => { activateRotateGroup(); applyMeshRotate(parseFloat(range.value) - step); });
+        incBtn.addEventListener('click', () => { activateRotateGroup(); applyMeshRotate(parseFloat(range.value) + step); });
+        resetBtn.addEventListener('click', () => { activateRotateGroup(); applyMeshRotate(defaultVal); });
+
+        row.appendChild(labelEl);
+        row.appendChild(decBtn);
+        row.appendChild(trackWrapper);
+        row.appendChild(incBtn);
+        row.appendChild(valueSpan);
         group.appendChild(row);
         return group;
     }

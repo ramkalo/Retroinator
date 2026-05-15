@@ -23,6 +23,9 @@ import { drawViewport,       hitTestViewport,        onDragViewport,      resetP
 import { drawKaleidoscope, hitTestKaleidoscope, onDragKaleidoscope, resetKaleidoscopeVertices } from './overlays/kaleidoscopeOverlay.js';
 import { drawDigitalSmear, hitTestDigitalSmear, onDragDigitalSmear, deleteSmearNode } from './overlays/digitalSmearOverlay.js';
 import { drawBlendMap, hitTestBlendMap, onDragBlendMap } from './overlays/blendMapOverlay.js';
+import { drawDrawTool, hitTestDrawTool, onDragDrawTool, finalizeDrawToolStroke, onDrawToolDown } from './overlays/drawToolOverlay.js';
+import { drawMeshOverlay, hitTestMesh, onDragMesh } from './overlays/meshOverlay.js';
+import { drawTunnelOverlay, hitTestTunnel, onDragTunnel } from './overlays/tunnelOverlay.js';
 
 // ── onStackChange redraw dispatcher ──────────────────────────────────────────
 
@@ -94,6 +97,9 @@ onStackChange((key) => {
         drawViewport(p);
     }
     if (state.mode === 'digitalSmear') drawDigitalSmear(inst.params);
+    if (state.mode === 'drawTool')     drawDrawTool(inst.params);
+    if (state.mode === 'mesh')         drawMeshOverlay(inst.params);
+    if (state.mode === 'tunnel')       drawTunnelOverlay(inst.params);
 });
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -286,6 +292,38 @@ export function hideDigitalSmearOverlay() {
     if (state.mode === 'digitalSmear') _hideActive();
 }
 
+export function showDrawToolOverlay(inst) {
+    _activate('drawTool', inst, 'drawToolStrokes', 'drawToolStrokes');
+    drawDrawTool(inst.params);
+}
+
+export function hideDrawToolOverlay() {
+    if (state.mode === 'drawTool') _hideActive();
+}
+
+export function showMeshOverlay(inst) {
+    state.shapeKey   = 'meshFadeShape';
+    state.wKey       = 'meshFadeW';
+    state.hKey       = 'meshFadeH';
+    state.angleKey   = 'meshFadeAngle';
+    state.enabledKey = 'meshFadeEnabled';
+    _activate('mesh', inst, 'meshTLx', 'meshTLy');
+    drawMeshOverlay(inst.params);
+}
+
+export function hideMeshOverlay() {
+    if (state.mode === 'mesh') _hideActive();
+}
+
+export function showTunnelOverlay(inst) {
+    _activate('tunnel', inst, 'tunnelX1', 'tunnelY1');
+    drawTunnelOverlay(inst.params);
+}
+
+export function hideTunnelOverlay() {
+    if (state.mode === 'tunnel') _hideActive();
+}
+
 export function showBlendMapOverlay() {
     uiOverlay.removeEventListener('pointerdown', onDown);
     uiOverlay.removeEventListener('pointermove', onHover);
@@ -411,12 +449,25 @@ function getCursorForMode(mode, h) {
                 && (dsp.smearNodeCount ?? 0) < 24) return 'crosshair';
             return 'default';
         }
+        case 'drawTool':
+            return 'crosshair';
+        case 'mesh':
+            return (h === 'move' || h === 'fadeCenter') ? 'grab'
+                : h === 'rot' ? 'crosshair'
+                : h === 'edgeW' ? 'ew-resize'
+                : h === 'edgeH' ? 'ns-resize'
+                : h ? 'move' : 'default';
+        case 'tunnel':
+            return h === 'move' ? 'grab' : h ? 'move' : 'default';
         default:
             return h ? 'grab' : 'default';
     }
 }
 
 const HIT_FNS = {
+    tunnel:         hitTestTunnel,
+    mesh:           hitTestMesh,
+    drawTool:       hitTestDrawTool,
     blendMap:       hitTestBlendMap,
     kaleidoscope:   hitTestKaleidoscope,
     crop:           hitTestCrop,
@@ -435,6 +486,9 @@ const HIT_FNS = {
 };
 
 const DRAG_FNS = {
+    tunnel:         onDragTunnel,
+    mesh:           onDragMesh,
+    drawTool:       onDragDrawTool,
     blendMap:       onDragBlendMap,
     kaleidoscope:   onDragKaleidoscope,
     crop:           onDragCrop,
@@ -452,6 +506,9 @@ const DRAG_FNS = {
 };
 
 const DRAW_FNS = {
+    tunnel:         drawTunnelOverlay,
+    mesh:           drawMeshOverlay,
+    drawTool:       drawDrawTool,
     blendMap:       drawBlendMap,
     kaleidoscope:   drawKaleidoscope,
     fade:           drawFade,
@@ -541,6 +598,36 @@ function onDown(e) {
         };
     }
 
+    if (state.mode === 'drawTool') {
+        const inst = getStack().find(i => i.id === state.instId);
+        if (inst) onDrawToolDown(e, inst, canvas.getBoundingClientRect());
+    }
+
+    if (state.mode === 'mesh') {
+        const rect2 = canvas.getBoundingClientRect();
+        const inst2 = getStack().find(i => i.id === state.instId);
+        const p2 = inst2?.params ?? {};
+        state.dragAnchor = {
+            startX: e.clientX - rect2.left, startY: e.clientY - rect2.top,
+            tlx0: p2.meshTLx ?? 10, tly0: p2.meshTLy ?? 10,
+            trx0: p2.meshTRx ?? 90, try0: p2.meshTRy ?? 10,
+            brx0: p2.meshBRx ?? 90, bry0: p2.meshBRy ?? 90,
+            blx0: p2.meshBLx ?? 10, bly0: p2.meshBLy ?? 90,
+        };
+    }
+
+    if (state.mode === 'tunnel') {
+        const rect2 = canvas.getBoundingClientRect();
+        const inst2 = getStack().find(i => i.id === state.instId);
+        const p2 = inst2?.params ?? {};
+        state.dragAnchor = {
+            startX: e.clientX - rect2.left, startY: e.clientY - rect2.top,
+            x10: p2.tunnelX1 ?? 25, y10: p2.tunnelY1 ?? 50,
+            x20: p2.tunnelX2 ?? 75, y20: p2.tunnelY2 ?? 50,
+            cx0: p2.tunnelCx  ?? 50, cy0: p2.tunnelCy  ?? 40,
+        };
+    }
+
     state.hasDragged = false;
     uiOverlay.addEventListener('pointermove', onDrag);
     uiOverlay.addEventListener('pointerup',   onUp);
@@ -597,6 +684,11 @@ function onUp() {
     if (wasClick && mode === 'digitalSmear' && handle?.startsWith('node:')) {
         const idx = parseInt(handle.split(':')[1]);
         deleteSmearNode(instId, idx, inst.params);
+    }
+
+    if (mode === 'drawTool') {
+        const inst2 = getStack().find(i => i.id === instId);
+        if (inst2) finalizeDrawToolStroke(instId, inst2.params);
     }
 
     DRAW_FNS[mode]?.(getStack().find(i => i.id === instId)?.params ?? inst.params);

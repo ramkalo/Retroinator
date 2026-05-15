@@ -2,7 +2,7 @@ import { EFFECT_CATALOG, getEffect } from '../effects/registry.js';
 import { getStack, addEffect, removeEffect, moveEffect, duplicateEffect, setInstanceParam } from '../state/effectStack.js';
 import { saveState } from '../state/undo.js';
 import { buildEffectBody } from './stackControls.js';
-import { showFadeOverlay, hideFadeOverlay, showBlurOverlay, hideBlurOverlay, showCropOverlay, hideCropOverlay, showViewportOverlay, hideViewportOverlay, showMatrixRainOverlay, hideMatrixRainOverlay, showLineDragOverlay, hideLineDragOverlay, showChromaOverlay, hideChromaOverlay, showVignetteOverlay, hideVignetteOverlay, showCorruptedOverlay, hideCorruptedOverlay, showCRTCurvatureOverlay, hideCRTCurvatureOverlay, showTextOverlay, hideTextOverlay, showDoubleExposureOverlay, hideDoubleExposureOverlay, showShapeStickerOverlay, hideShapeStickerOverlay, showKaleidoscopeOverlay, hideKaleidoscopeOverlay, showDigitalSmearOverlay, hideDigitalSmearOverlay } from './canvasPicker.js';
+import { showFadeOverlay, hideFadeOverlay, showBlurOverlay, hideBlurOverlay, showCropOverlay, hideCropOverlay, showViewportOverlay, hideViewportOverlay, showMatrixRainOverlay, hideMatrixRainOverlay, showLineDragOverlay, hideLineDragOverlay, showChromaOverlay, hideChromaOverlay, showVignetteOverlay, hideVignetteOverlay, showCorruptedOverlay, hideCorruptedOverlay, showCRTCurvatureOverlay, hideCRTCurvatureOverlay, showTextOverlay, hideTextOverlay, showDoubleExposureOverlay, hideDoubleExposureOverlay, showShapeStickerOverlay, hideShapeStickerOverlay, showKaleidoscopeOverlay, hideKaleidoscopeOverlay, showDigitalSmearOverlay, hideDigitalSmearOverlay, showDrawToolOverlay, hideDrawToolOverlay, showMeshOverlay, hideMeshOverlay, showTunnelOverlay, hideTunnelOverlay } from './canvasPicker.js';
 
 let _expandedId = null;
 
@@ -24,7 +24,7 @@ function renderCatalog() {
             <button class="catalog-item-add" title="Add ${entry.label}">+</button>
         `;
         item.querySelector('.catalog-item-add').addEventListener('click', () => {
-            const PALETTE_DEPENDENT = new Set(['colorRemap', 'matrixRain', 'shapeSticker', 'text', 'corrupted']);
+            const PALETTE_DEPENDENT = new Set(['colorRemap', 'matrixRain', 'shapeSticker', 'text', 'corrupted', 'drawTool', 'mesh', 'tunnel']);
             saveState();
             if (PALETTE_DEPENDENT.has(entry.name) && !getStack().some(i => i.effectName === 'colorPalette')) {
                 addEffect('colorPalette');
@@ -249,6 +249,9 @@ export function renderStackList() {
     if (newEffect !== 'shapeSticker')   hideShapeStickerOverlay();
     if (newEffect !== 'kaleidoscope')   hideKaleidoscopeOverlay();
     if (newEffect !== 'digital-smear')  hideDigitalSmearOverlay();
+    if (newEffect !== 'drawTool')       hideDrawToolOverlay();
+    if (newEffect !== 'mesh')           hideMeshOverlay();
+    if (newEffect !== 'tunnel')         hideTunnelOverlay();
 
     if (!expandedInst) return;
 
@@ -273,6 +276,9 @@ export function renderStackList() {
     else if (newEffect === 'shapeSticker')  showShapeStickerOverlay(expandedInst);
     else if (newEffect === 'kaleidoscope')  showKaleidoscopeOverlay(expandedInst);
     else if (newEffect === 'digital-smear') showDigitalSmearOverlay(expandedInst);
+    else if (newEffect === 'drawTool')      showDrawToolOverlay(expandedInst);
+    else if (newEffect === 'mesh')          showMeshOverlay(expandedInst);
+    else if (newEffect === 'tunnel')        showTunnelOverlay(expandedInst);
 }
 
 // --- Pointer-based drag-and-drop ---

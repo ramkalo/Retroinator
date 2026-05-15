@@ -244,8 +244,6 @@ function _getFadeControl(prefix) {
 }
 
 function _buildCanvas2DCompositorGLSL(blend, fade) {
-    const blendEnabledUniform = blend.blendFn.replace('Blend', 'BlendEnabled');
-    const opacityUniform      = blend.blendFn.replace('Blend', 'Opacity');
     return `uniform sampler2D uStickerTex;
 
 ${blend.glsl}
@@ -256,14 +254,9 @@ void main() {
     vec4 src = texture(uStickerTex, vUV);
     if (src.a < 0.001) { fragColor = c; return; }
     if (!${blend.thresholdFn}(c, src)) { fragColor = c; return; }
-    vec3 srcColor = (${blendEnabledUniform} == 1)
-        ? vec3(${blend.blendChFn}(c.r, src.r),
-               ${blend.blendChFn}(c.g, src.g),
-               ${blend.blendChFn}(c.b, src.b))
-        : src.rgb;
-    float blendAlpha = (${blendEnabledUniform} == 1) ? ${opacityUniform} / 100.0 : 1.0;
+    vec3 blended = ${blend.blendFn}(c.rgb, src.rgb);
     float weight = ${fade ? `${fade.fnName}()` : '1.0'};
-    fragColor = vec4(mix(c.rgb, srcColor, src.a * blendAlpha * weight), c.a);
+    fragColor = vec4(mix(c.rgb, blended, src.a * weight), c.a);
 }`;
 }
 

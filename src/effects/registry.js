@@ -33,6 +33,9 @@ const viewportEntryEffect = {
 import { matrixRainEffect } from './matrixRain.js';
 import { shapeStickerEffect } from './shapeSticker.js';
 import kaleidoscopeEffect from './kaleidoscope.js';
+import { drawToolEffect } from './drawTool.js';
+import { meshEffect } from './mesh.js';
+import { tunnelEffect } from './tunnel.js';
 
 /**
  * @typedef {Object} EffectBase
@@ -118,6 +121,9 @@ export const EFFECTS = [
     viewportEntryEffect,
     viewportEffect,
     shapeStickerEffect,
+    drawToolEffect,
+    meshEffect,
+    tunnelEffect,
 ];
 
 for (const effect of EFFECTS) validateEffect(effect);
@@ -188,6 +194,9 @@ export const EFFECT_CATALOG = [
     { name: 'vhs',            label: 'VHS Line Glitch',      description: 'Tracking line glitch bands' },
     { name: 'kaleidoscope',  label: 'Kaleidoscope',         description: 'Mirror, radial symmetry, and kaleidoscope modes with drag handles' },
     { name: 'viewport',      label: 'Viewport',             description: 'Reveal a shaped window that cuts through selected effects' },
+    { name: 'drawTool',     label: 'Draw',                 description: 'Freehand pen with solid or static fill' },
+    { name: 'mesh',         label: 'Mesh',                 description: 'Draggable quad grid overlay with configurable line distribution' },
+    { name: 'tunnel',       label: 'Tunnel',               description: 'Repeating shapes along a bezier path creating a tunnel illusion' },
     //{ name: 'vignette',       label: 'Vignette',             description: 'Edge darkening or brightening' },
 ];
 
